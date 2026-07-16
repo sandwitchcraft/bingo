@@ -1,41 +1,46 @@
 import {
-  DMSans_400Regular,
-  DMSans_500Medium,
-  DMSans_600SemiBold,
-  DMSans_700Bold,
-} from "@expo-google-fonts/dm-sans";
+  IBMPlexMono_500Medium,
+  IBMPlexMono_600SemiBold,
+} from "@expo-google-fonts/ibm-plex-mono";
+import { Inter_400Regular, Inter_600SemiBold } from "@expo-google-fonts/inter";
+import { Manrope_700Bold, Manrope_800ExtraBold } from "@expo-google-fonts/manrope";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { ScanResultSheet } from "@/components/ScanResultSheet";
 import { ScanResultProvider } from "@/lib/scanResult";
-import { THEMES, ThemeContext, type ThemeName } from "@/lib/theme";
+import { resolveTheme, THEMES, ThemeContext, type ThemePreference } from "@/lib/theme";
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
-    DMSans_400Regular,
-    DMSans_500Medium,
-    DMSans_600SemiBold,
-    DMSans_700Bold,
+    Manrope_700Bold,
+    Manrope_800ExtraBold,
+    Inter_400Regular,
+    Inter_600SemiBold,
+    IBMPlexMono_500Medium,
+    IBMPlexMono_600SemiBold,
   });
 
-  const [themeName, setThemeName] = useState<ThemeName>("dark");
+  // Re-renders when the OS scheme changes, so "system" tracks it live rather than
+  // only at launch. app.json sets userInterfaceStyle "automatic", without which this
+  // would report light forever.
+  const systemScheme = useColorScheme();
 
-  const toggleTheme = useCallback(() => {
-    setThemeName((prev) => (prev === "dark" ? "light" : "dark"));
-  }, []);
+  const [preference, setPreference] = useState<ThemePreference>("system");
+  const themeName = resolveTheme(preference, systemScheme);
 
   const themeValue = useMemo(
     () => ({
       name: themeName,
       theme: THEMES[themeName],
-      setThemeName,
-      toggleTheme,
+      preference,
+      setPreference,
     }),
-    [themeName, toggleTheme],
+    [themeName, preference],
   );
 
   if (!fontsLoaded) {

@@ -13,10 +13,10 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BIN_STYLE } from "@/lib/bins";
-import { formatItemName, getBinForItem, getItemEmoji } from "@/lib/regionData";
+import { BIN_LABEL, binColor, binSurface } from "@/lib/bins";
+import { formatItemName, getBinForItem } from "@/lib/regionData";
 import { useScanResult } from "@/lib/scanResult";
-import { FONT, useTheme } from "@/lib/theme";
+import { FONT, radii, useTheme } from "@/lib/theme";
 
 const COLLAPSED_HEIGHT = 320; // visible content height when collapsed
 const SNAP_THRESHOLD = 60; // drag travel to switch snap state
@@ -30,7 +30,11 @@ export function ScanResultSheet() {
   const insets = useSafeAreaInsets();
 
   const collapsedTop = height - COLLAPSED_HEIGHT;
-  const expandedTop = 0;
+  // Expanded stops below the status bar rather than at 0, so the sheet's rounded
+  // top edge and handle stay clear of the notch. Height is sized to match, so the
+  // bottom of the sheet lands exactly on the bottom of the screen when expanded.
+  const expandedTop = insets.top;
+  const sheetHeight = height - expandedTop;
 
   // top position of the sheet; starts off-screen.
   const top = useSharedValue(height);
@@ -112,15 +116,15 @@ export function ScanResultSheet() {
   const result = getBinForItem(activeItemKey);
   if (!result) return null;
 
-  const bin = BIN_STYLE[result.bin];
-  const emoji = getItemEmoji(activeItemKey);
+  const surface = binSurface(result.bin);
+  const accent = binColor(result.bin);
   const itemName = formatItemName(activeItemKey);
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {/* Scrim — only intercepts touches while expanded */}
       <Animated.View
-        style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]}
+        style={[StyleSheet.absoluteFill, { backgroundColor: theme.scrim }, scrimStyle]}
         pointerEvents={expanded ? "auto" : "none"}
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={close} />
@@ -130,7 +134,7 @@ export function ScanResultSheet() {
       <Animated.View
         style={[
           styles.sheet,
-          { height, backgroundColor: theme.card, borderColor: theme.cardBorder },
+          { height: sheetHeight, backgroundColor: theme.bgAlt, borderColor: theme.cardBorder },
           sheetStyle,
         ]}
       >
@@ -144,53 +148,46 @@ export function ScanResultSheet() {
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Item header */}
+          {/* Item header. With no pictogram, the item name itself carries the outcome
+              color — `accent` is the bin's color, so a recycling item reads Harbor,
+              compost reads sprout, and so on. */}
           <View style={styles.itemHeader}>
-            <Text style={styles.itemEmoji}>{emoji}</Text>
-            <View style={styles.itemHeaderText}>
-              <Text style={[styles.eyebrow, { color: theme.textMuted }]}>Identified Item</Text>
-              <Text style={[styles.itemName, { color: theme.text }]}>{itemName}</Text>
-            </View>
+            <Text style={[styles.eyebrow, { color: theme.textMuted }]}>Identified item</Text>
+            <Text style={[styles.itemName, { color: accent }]}>{itemName}</Text>
           </View>
 
-          {/* Bin badge card */}
-          <View style={[styles.binCard, { backgroundColor: bin.dark.bg, borderColor: bin.dark.border }]}>
-            <Text style={styles.binEmoji}>{bin.emoji}</Text>
-            <View style={styles.binText}>
-              <Text style={[styles.binEyebrow, { color: bin.dark.text }]}>Sort Into</Text>
-              <Text style={[styles.binLabel, { color: bin.dark.text }]}>{bin.label}</Text>
-              <Text style={[styles.binDesc, { color: bin.dark.text }]}>{result.notes}</Text>
-            </View>
+          {/* Bin outcome card */}
+          <View style={[styles.binCard, { backgroundColor: surface.bg, borderColor: surface.border }]}>
+            <Text style={[styles.eyebrow, { color: theme.textMuted }]}>Sort into</Text>
+            <Text style={[styles.binLabel, { color: accent }]}>{BIN_LABEL[result.bin]}</Text>
           </View>
 
-          {/* Why? detail card */}
-          <View style={[styles.whyCard, { backgroundColor: theme.bgInput, borderColor: theme.cardBorder }]}>
-            <Text style={[styles.eyebrow, { color: theme.textMuted }]}>Why?</Text>
-            <Text style={[styles.whyBody, { color: theme.textBody }]}>{result.notes}</Text>
+          {/* Handling detail */}
+          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.eyebrow, { color: theme.textMuted }]}>Why</Text>
+            <Text style={[styles.body, { color: theme.textBody }]}>{result.notes}</Text>
           </View>
 
           {/* Consult-guide link */}
           {result.link && (
             <Pressable
-              style={[styles.linkRow, { borderColor: bin.dark.border }]}
+              style={[styles.linkRow, { borderColor: surface.border, backgroundColor: surface.bg }]}
               onPress={() => WebBrowser.openBrowserAsync(result.link!)}
             >
-              <Text style={[styles.linkText, { color: bin.dark.text }]}>
-                View local disposal guide ↗
-              </Text>
+              <Text style={[styles.linkText, { color: accent }]}>View local disposal guide ↗</Text>
             </Pressable>
           )}
 
           {/* Actions */}
           <View style={styles.actions}>
             <Pressable
-              style={[styles.btn, { backgroundColor: theme.bgInput, borderColor: theme.cardBorder }]}
+              style={[styles.btn, { backgroundColor: theme.secondaryBg }]}
               onPress={close}
             >
-              <Text style={[styles.btnText, { color: theme.primary }]}>Scan another</Text>
+              <Text style={[styles.btnText, { color: theme.secondaryText }]}>Scan another</Text>
             </Pressable>
             <Pressable
-              style={[styles.btn, { backgroundColor: theme.primary, borderColor: theme.primary }]}
+              style={[styles.btn, { backgroundColor: theme.primary }]}
               onPress={() => {
                 dismiss();
                 router.push("/history");
@@ -202,7 +199,7 @@ export function ScanResultSheet() {
 
           {/* Report (deferred wiring) */}
           <Pressable style={styles.reportRow} onPress={() => {}}>
-            <Text style={[styles.reportText, { color: theme.textMuted }]}>ⓘ Report incorrect sort</Text>
+            <Text style={[styles.reportText, { color: theme.textMuted }]}>Report incorrect sort</Text>
           </Pressable>
         </ScrollView>
       </Animated.View>
@@ -211,7 +208,6 @@ export function ScanResultSheet() {
 }
 
 const styles = StyleSheet.create({
-  scrim: { backgroundColor: "rgba(0,0,0,0.6)" },
   sheet: {
     position: "absolute",
     left: 0,
@@ -237,84 +233,62 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   itemHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
+    paddingTop: 4,
   },
-  itemEmoji: { fontSize: 44 },
-  itemHeaderText: { flex: 1 },
   eyebrow: {
-    fontFamily: FONT.medium,
+    fontFamily: FONT.utility,
     fontSize: 10,
-    letterSpacing: 2,
+    letterSpacing: 1.6,
     textTransform: "uppercase",
   },
   itemName: {
-    fontFamily: FONT.semibold,
-    fontSize: 24,
-    marginTop: 2,
+    fontFamily: FONT.display,
+    fontSize: 26,
+    letterSpacing: -0.4,
+    marginTop: 3,
   },
   binCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-    borderRadius: 16,
+    borderRadius: radii.card,
     borderWidth: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingVertical: 16,
-  },
-  binEmoji: { fontSize: 30 },
-  binText: { flex: 1 },
-  binEyebrow: {
-    fontFamily: FONT.medium,
-    fontSize: 10,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-    opacity: 0.7,
   },
   binLabel: {
-    fontFamily: FONT.semibold,
+    fontFamily: FONT.heading,
     fontSize: 20,
-    marginTop: 2,
+    letterSpacing: -0.2,
+    marginTop: 3,
   },
-  binDesc: {
-    fontFamily: FONT.regular,
-    fontSize: 12,
-    opacity: 0.6,
-    marginTop: 4,
-  },
-  whyCard: {
-    borderRadius: 16,
+  card: {
+    borderRadius: radii.card,
     borderWidth: 1,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    padding: 18,
     gap: 8,
   },
-  whyBody: {
-    fontFamily: FONT.regular,
+  body: {
+    fontFamily: FONT.body,
     fontSize: 14,
     lineHeight: 21,
   },
   linkRow: {
-    borderRadius: 12,
+    borderRadius: radii.card,
     borderWidth: 1,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     alignItems: "center",
   },
-  linkText: { fontFamily: FONT.medium, fontSize: 14 },
+  linkText: { fontFamily: FONT.utilityStrong, fontSize: 12 },
   actions: {
     flexDirection: "row",
     gap: 12,
   },
   btn: {
     flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: radii.button,
     paddingVertical: 14,
     alignItems: "center",
   },
-  btnText: { fontFamily: FONT.medium, fontSize: 14 },
+  btnText: { fontFamily: FONT.utilityStrong, fontSize: 12 },
   reportRow: { alignItems: "center", paddingVertical: 4 },
-  reportText: { fontFamily: FONT.regular, fontSize: 14 },
+  reportText: { fontFamily: FONT.utility, fontSize: 11, letterSpacing: 0.2 },
 });

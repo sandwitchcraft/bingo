@@ -1,15 +1,37 @@
 import { CameraView, useCameraPermissions } from "expo-camera";
+import { useIsFocused } from "expo-router";
 import { useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Wordmark } from "@/components/Wordmark";
+import { getRandomItemKey } from "@/lib/regionData";
 import { useScanResult } from "@/lib/scanResult";
-import { FONT } from "@/lib/theme";
+import { colors, FONT, radii } from "@/lib/theme";
 
-// Fixed dark scan-environment background per spec, independent of app theme.
-const SCAN_BG = "#0a1a0c";
-const FRAME_WHITE = "#ffffff";
-const FRAME_GREEN = "#4ade80";
+// The scan screen is a fixed dark environment regardless of app theme — it sits over
+// the camera feed, so it uses brand ink rather than the active theme's background.
+const SCAN_BG = colors.ink;
+const FRAME_IDLE = colors.paper;
+const FRAME_ACTIVE = colors.sprout;
+
+// Alpha overlays over the camera feed, as hex-alpha suffixes on the brand tokens so
+// they track a token change instead of drifting as loose rgba() literals.
+const RING_BORDER = `${colors.paper}33`; // paper 20%
+const TAP_LABEL = `${colors.paper}8C`; // paper 55%
+const RING_FILL = `${colors.sprout}26`; // sprout 15%
+
+// The capture only ever feeds the classifier (224x224 once the model lands), never the
+// UI, so resolution above ~2MP is pure latency. Left alone, iOS captures at full sensor
+// resolution — up to 48MP — then crops, reorients and re-encodes it at quality 1.0.
+// Dropping the session preset shrinks the image through that whole pipeline.
+// Note: expo-camera's skipProcessing is Android-only; iOS silently discards it.
+const PICTURE_SIZE = "1920x1080";
+
+const CAPTURE_OPTIONS = {
+  quality: 0.3,
+  shutterSound: false,
+} as const;
 
 export default function ScanScreen() {
   const insets = useSafeAreaInsets();
@@ -17,6 +39,10 @@ export default function ScanScreen() {
   const cameraRef = useRef<CameraView>(null);
   const { showResult } = useScanResult();
   const [scanning, setScanning] = useState(false);
+  // The tabs stay mounted when you navigate away, so CameraView has to be
+  // unmounted explicitly or it keeps holding the capture session (and the
+  // OS camera indicator) alive on the History/Settings tabs.
+  const isFocused = useIsFocused();
 
   if (!permission) {
     return (
@@ -29,9 +55,9 @@ export default function ScanScreen() {
   if (!permission.granted) {
     return (
       <View style={[styles.container, styles.centered, { padding: 24 }]}>
-        <Text style={styles.permissionText}>We need camera access to scan items.</Text>
+        <Text style={styles.permissionText}>Camera access is required to scan items.</Text>
         <Pressable style={styles.permissionButton} onPress={requestPermission}>
-          <Text style={styles.permissionButtonText}>Grant Permission</Text>
+          <Text style={styles.permissionButtonText}>Enable camera access</Text>
         </Pressable>
       </View>
     );
@@ -41,25 +67,31 @@ export default function ScanScreen() {
     if (scanning || !cameraRef.current) return;
     setScanning(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync();
+      const photo = await cameraRef.current.takePictureAsync(CAPTURE_OPTIONS);
       if (photo) {
-        const fakeDetectedItem = "plastic_bottle"; // placeholder until ML is wired in
-        showResult(fakeDetectedItem);
+        showResult(getRandomItemKey()); // placeholder until ML is wired in
       }
     } finally {
       setScanning(false);
     }
   };
 
-  const cornerColor = scanning ? FRAME_GREEN : FRAME_WHITE;
+  const cornerColor = scanning ? FRAME_ACTIVE : FRAME_IDLE;
 
   return (
     <View style={styles.container}>
-      <CameraView style={StyleSheet.absoluteFill} facing="back" ref={cameraRef} />
+      {isFocused && (
+        <CameraView
+          style={StyleSheet.absoluteFill}
+          facing="back"
+          ref={cameraRef}
+          pictureSize={PICTURE_SIZE}
+        />
+      )}
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Text style={styles.eyebrow}>SortScan</Text>
+        <Wordmark size={18} color={colors.paper} />
       </View>
 
       {/* Scan frame */}
@@ -75,13 +107,13 @@ export default function ScanScreen() {
       {/* Tap affordance */}
       <View style={[styles.affordanceWrap, { bottom: insets.bottom + 40 }]}>
         {scanning ? (
-          <Text style={styles.scanningLabel}>SCANNING…</Text>
+          <Text style={styles.scanningLabel}>Scanning…</Text>
         ) : (
           <Pressable style={styles.tapTarget} onPress={handleScan} hitSlop={16}>
             <View style={styles.outerRing}>
               <View style={styles.innerCircle} />
             </View>
-            <Text style={styles.tapLabel}>TAP TO SCAN</Text>
+            <Text style={styles.tapLabel}>Tap to scan</Text>
           </Pressable>
         )}
       </View>
@@ -99,26 +131,27 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   loadingText: {
-    fontFamily: FONT.regular,
-    color: "#e8f5e9",
+    fontFamily: FONT.body,
+    color: colors.paper,
+    fontSize: 14,
   },
   permissionText: {
-    fontFamily: FONT.regular,
-    color: "#e8f5e9",
+    fontFamily: FONT.body,
+    color: colors.paper,
     textAlign: "center",
     marginBottom: 20,
     fontSize: 14,
   },
   permissionButton: {
-    backgroundColor: FRAME_GREEN,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    backgroundColor: colors.sproutDeep,
+    paddingVertical: 14,
+    paddingHorizontal: 26,
+    borderRadius: radii.button,
   },
   permissionButtonText: {
-    fontFamily: FONT.medium,
-    color: "#052e16",
-    fontSize: 14,
+    fontFamily: FONT.utilityStrong,
+    color: colors.white,
+    fontSize: 12,
   },
   header: {
     position: "absolute",
@@ -128,13 +161,6 @@ const styles = StyleSheet.create({
     zIndex: 20,
     paddingHorizontal: 24,
     paddingBottom: 16,
-  },
-  eyebrow: {
-    fontFamily: FONT.medium,
-    fontSize: 10,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-    color: "#3d5c42",
   },
   frameWrap: {
     position: "absolute",
@@ -195,32 +221,32 @@ const styles = StyleSheet.create({
   outerRing: {
     width: 64,
     height: 64,
-    borderRadius: 32,
+    borderRadius: radii.button,
     borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.2)",
+    borderColor: RING_BORDER,
     alignItems: "center",
     justifyContent: "center",
   },
   innerCircle: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: "rgba(74,222,128,0.15)",
+    borderRadius: radii.button,
+    backgroundColor: RING_FILL,
     borderWidth: 1.5,
-    borderColor: FRAME_GREEN,
+    borderColor: colors.sprout,
   },
   tapLabel: {
-    fontFamily: FONT.medium,
+    fontFamily: FONT.utility,
     fontSize: 10,
-    letterSpacing: 2,
+    letterSpacing: 1.6,
     textTransform: "uppercase",
-    color: "rgba(255,255,255,0.35)",
+    color: TAP_LABEL,
   },
   scanningLabel: {
-    fontFamily: FONT.medium,
+    fontFamily: FONT.utilityStrong,
     fontSize: 10,
-    letterSpacing: 2,
+    letterSpacing: 1.6,
     textTransform: "uppercase",
-    color: FRAME_GREEN,
+    color: colors.sprout,
   },
 });

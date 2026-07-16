@@ -1,20 +1,23 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { FONT, useTheme, type ThemeName } from "@/lib/theme";
+import { Wordmark } from "@/components/Wordmark";
+import { accent, FONT, radii, useTheme, type ThemePreference } from "@/lib/theme";
 
-const MODES: { name: ThemeName; emoji: string; label: string }[] = [
-  { name: "dark", emoji: "🌙", label: "Dark" },
-  { name: "light", emoji: "☀️", label: "Light" },
+// Light first: it's the brand's primary mode.
+const MODES: { name: ThemePreference; label: string }[] = [
+  { name: "light", label: "Light" },
+  { name: "dark", label: "Dark" },
+  { name: "system", label: "System" },
 ];
 
 export default function SettingsScreen() {
-  const { theme, name, setThemeName } = useTheme();
+  const { theme, name, preference, setPreference } = useTheme();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={[styles.eyebrow, { color: theme.textMuted }]}>SortScan</Text>
+        <Wordmark size={15} />
         <Text style={[styles.heading, { color: theme.text }]}>Settings</Text>
       </View>
 
@@ -24,30 +27,32 @@ export default function SettingsScreen() {
           <Text style={[styles.rowLabel, { color: theme.textBody }]}>Mode</Text>
           <View style={[styles.segment, { backgroundColor: theme.bgInput }]}>
             {MODES.map((mode) => {
-              const active = name === mode.name;
+              // Tracks what was chosen, not what it resolved to: with "system" active
+              // on a dark phone, "System" highlights — not "Dark".
+              const active = preference === mode.name;
               return (
                 <Pressable
                   key={mode.name}
                   style={[
                     styles.segmentButton,
                     active && {
-                      backgroundColor: theme.card,
-                      shadowColor: "#000",
-                      shadowOpacity: 0.15,
-                      shadowOffset: { width: 0, height: 1 },
-                      shadowRadius: 3,
-                      elevation: 2,
+                      backgroundColor: theme.segmentActiveBg,
+                      borderColor: theme.segmentActiveBorder,
+                      borderWidth: 1,
                     },
                   ]}
-                  onPress={() => setThemeName(mode.name)}
+                  onPress={() => setPreference(mode.name)}
                 >
                   <Text
                     style={[
                       styles.segmentText,
-                      { color: active ? theme.primary : theme.textMuted },
+                      {
+                        fontFamily: active ? FONT.utilityStrong : FONT.utility,
+                        color: active ? accent[name] : theme.textMuted,
+                      },
                     ]}
                   >
-                    {mode.emoji} {mode.label}
+                    {mode.label}
                   </Text>
                 </Pressable>
               );
@@ -55,8 +60,8 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <Text style={[styles.note, { color: theme.textSubtle }]}>
-          More settings (region, preferences, support) coming soon.
+        <Text style={[styles.note, { color: theme.textMuted }]}>
+          Region, preferences, and support settings are not yet available.
         </Text>
       </View>
     </SafeAreaView>
@@ -66,47 +71,43 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 12 },
-  eyebrow: {
-    fontFamily: FONT.medium,
-    fontSize: 10,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-  },
-  heading: { fontFamily: FONT.semibold, fontSize: 24, marginTop: 4 },
+  heading: { fontFamily: FONT.heading, fontSize: 26, letterSpacing: -0.4, marginTop: 4 },
   body: { paddingHorizontal: 24, paddingTop: 8 },
   sectionLabel: {
-    fontFamily: FONT.medium,
+    fontFamily: FONT.utility,
     fontSize: 10,
-    letterSpacing: 1.8,
+    letterSpacing: 1.6,
     textTransform: "uppercase",
-    opacity: 0.5,
     marginBottom: 10,
   },
   card: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderRadius: 16,
+    borderRadius: radii.card,
     borderWidth: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingVertical: 16,
   },
-  rowLabel: { fontFamily: FONT.regular, fontSize: 14 },
+  rowLabel: { fontFamily: FONT.body, fontSize: 14 },
   segment: {
     flexDirection: "row",
-    borderRadius: 12,
-    padding: 2,
-    gap: 2,
+    borderRadius: radii.button,
+    padding: 3,
+    gap: 3,
   },
   segmentButton: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: radii.button,
+    borderWidth: 1,
+    borderColor: "transparent",
   },
-  segmentText: { fontFamily: FONT.medium, fontSize: 12 },
+  segmentText: { fontSize: 11, letterSpacing: 0.4 },
   note: {
-    fontFamily: FONT.regular,
+    fontFamily: FONT.body,
     fontSize: 12,
+    lineHeight: 18,
     marginTop: 16,
   },
 });

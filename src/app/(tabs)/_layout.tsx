@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HistoryIcon, ScanIcon, SettingsIcon } from "@/components/TabIcons";
-import { FONT, useTheme } from "@/lib/theme";
+import { accent, FONT, useTheme } from "@/lib/theme";
 
 type TabDef = {
   name: string;
@@ -20,7 +20,7 @@ const TAB_ORDER: TabDef[] = [
 ];
 
 function CustomTabBar({ state, navigation }: BottomTabBarProps) {
-  const { theme } = useTheme();
+  const { theme, name: themeName } = useTheme();
   const insets = useSafeAreaInsets();
 
   return (
@@ -39,7 +39,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         if (!route) return null;
         const routeIndex = state.routes.indexOf(route);
         const focused = state.index === routeIndex;
-        const color = focused ? theme.primary : theme.textMuted;
+        const color = focused ? accent[themeName] : theme.textMuted;
 
         const onPress = () => {
           const event = navigation.emit({
@@ -55,7 +55,14 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         return (
           <Pressable key={tab.name} style={styles.tab} onPress={onPress}>
             <tab.Icon size={tab.size} color={color} />
-            <Text style={[styles.label, { color }]}>{tab.label}</Text>
+            <Text
+              style={[
+                styles.label,
+                { color, fontFamily: focused ? FONT.utilityStrong : FONT.utility },
+              ]}
+            >
+              {tab.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -90,9 +97,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   label: {
-    fontFamily: FONT.medium,
-    fontSize: 10,
+    fontSize: 9,
     textTransform: "uppercase",
-    letterSpacing: 1.5,
+    letterSpacing: 1.4,
   },
 });
