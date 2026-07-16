@@ -1,0 +1,160 @@
+SORTSCAN — COMPLETE UI & VISUAL DESIGN SPECIFICATION
+=====================================================
+
+SortScan is a mobile-first waste-sorting app built in React with Tailwind CSS v4. The entire app is constrained to a maximum width of 430px, centered horizontally, and fills 100dvh (dynamic viewport height) to account for mobile browser chrome. Overflow is hidden at the root level. The app supports a dark mode and a light mode, toggled by the user in Settings, with every surface responding to the active theme.
+
+
+TYPOGRAPHY
+----------
+The sole typeface throughout the entire app is DM Sans, loaded from Google Fonts. It is applied via inline fontFamily: "'DM Sans', sans-serif" on every text element — there is no fallback stack beyond sans-serif. Type scale in use: 10px uppercase tracking-widest labels (letter-spacing ~0.2em) used for section headers, eyebrow text, and badge labels; 12px (text-xs) for timestamps, hints, descriptions, and caption text; 14px (text-sm) for body copy, list item names, preference row labels, and button text; 18px (text-lg) for modal headings; 24px (text-2xl, font-semibold) for screen-level headings; 30px (text-3xl) for emoji bin icons inside cards. Font weights in use: 400 (regular) for body and captions, 500 (medium) for tab labels and button text, 600 (semibold) for screen headings and modal titles, 700 (bold) for stat counts on the history screen.
+
+
+COLOR SYSTEM — DARK MODE (DEFAULT)
+-----------------------------------
+Page background:                #0a1209   (near-black deep green)
+Alternate background (cards):   #0d1a0f
+Input / inset background:       #141f15
+Card border:                    #1f3322
+Primary text:                   #e8f5e9   (near-white green tint)
+Muted text:                     #3d5c42
+Subtle / hint text:             #2a4a2e
+Body copy text:                 #c8e6c9
+Primary accent (green):         #4ade80
+Primary accent text:            #052e16   (text placed on green backgrounds)
+Nav background:                 #0a1209
+Nav border:                     #1f3322
+Toggle track (off state):       #1f3322
+Toggle thumb (off state):       #3d5c42
+Sheet drag handle bar:          #2a4a2e
+Segment control active bg:      #1a3320
+Segment control active border:  #2a5c35
+Scrim overlay:                  rgba(0,0,0,0.75)
+
+
+COLOR SYSTEM — LIGHT MODE
+--------------------------
+Page background:                #f2f7f2   (pale sage)
+Alternate background:           #ffffff
+Input / inset background:       #e8f2e8
+Card border:                    #cce0cc
+Primary text:                   #0d1a0f
+Muted text:                     #5c7a60
+Subtle / hint text:             #8aaa8e
+Body copy:                      #2d4a30
+Primary accent (green):         #16a34a   (green-600)
+Primary accent text:            #ffffff
+Nav background:                 #f2f7f2
+Nav border:                     #cce0cc
+Toggle track (off state):       #cce0cc
+Toggle thumb (off state):       #8aaa8e
+Sheet drag handle:              #cce0cc
+Segment active background:      #d4edd4
+Segment active border:          #a3c9a3
+Scrim overlay:                  rgba(0,0,0,0.4)
+
+
+BIN COLOR SYSTEM (FIXED, THEME-INDEPENDENT IN DARK MODE)
+---------------------------------------------------------
+Compost:    text #86efac | background #052e16 | border #166534 | icon 🌱
+Recycling:  text #93c5fd | background #0c1a2e | border #1e3a5f | icon ♻️
+Garbage:    text #fca5a5 | background #2d0a0a | border #7f1d1d | icon 🗑️
+
+In light mode, the History screen adapts bin badges:
+  Compost:    background #f0fdf4 | text #166534 | dot #16a34a
+  Recycling:  background #eff6ff | text #1d4ed8 | dot #3b82f6
+  Garbage:    background #fef2f2 | text #991b1b | dot #ef4444
+
+
+BORDER RADIUS
+-------------
+Cards, list rows, and sheet surfaces:  rounded-2xl (16px)
+Buttons:                               rounded-xl (12px)
+Drag sheets (top corners only):        rounded-t-3xl (24px, no bottom radius)
+Toggle tracks:                         13px radius (fully rounded pill)
+Toggle thumbs:                         9px radius
+History list badges:                   rounded-lg (8px)
+
+
+BOTTOM TAB NAVIGATION
+---------------------
+The nav bar sits at the bottom of the screen with a 1px border-top in the theme's navBorder color and navBg background. It contains exactly three tabs in a flex row with equal flex-1 widths: History (left), Scan (center), Settings (right). Each tab is a button with flex-col layout centering icon above label, with py-3 vertical padding. Tab labels are 10px uppercase font-medium with letter-spacing widest. Active tab color is the primary accent; inactive is textMuted. All tabs transition color on 200ms.
+
+Icon sizes: Scan (Camera) icon is 30×30px SVG. History and Settings icons are 22×22px SVG. All icons are stroke-only, strokeWidth="2", strokeLinecap="round", no fill. The Camera icon is a camera body path + 4px radius lens circle (cx=12 cy=13). The History icon is a 9px radius circle with clock hands (polyline "12 7 12 12 15 15"). The Settings icon is a gear path with a 3px radius center circle. Icon stroke color switches between primary accent (active) and textMuted (inactive).
+
+
+SCAN SCREEN
+-----------
+Screen background is fixed dark #0a1a0c regardless of theme (simulates a camera environment). The camera view fills the flex-1 space with a radial gradient (radial-gradient(ellipse at 30% 40%, #1a2e1c 0%, #0a1209 40%, #050c06 100%)) plus a 20%-opacity SVG fractal noise grain texture at 150px tile size layered on top.
+
+Centered in the camera view is a 240×240px scan frame made of four 32×32px corner pieces. Each corner is an absolutely positioned div with two 2px borders in the appropriate directions (top+left, top+right, bottom+left, bottom+right) with 8px rounding on the outer corner. Corner borders are #ffffff at rest, transitioning to #4ade80 over 0.3s when scanning is active.
+
+During scanning, an animated horizontal scan line (1px height, absolute positioned inside the frame) sweeps from top to bottom over a 2000ms RAF loop. The line is a linear-gradient from transparent → #4ade80 at 20% → #4ade80 at 80% → transparent, with a green glow (box-shadow: 0 0 8px #4ade80, 0 0 20px rgba(74,222,128,0.4)).
+
+When idle, a tap affordance sits at bottom-10: a 64px outer circle (2px border rgba(255,255,255,0.2), near-transparent fill) containing a 48px inner circle (background rgba(74,222,128,0.15), border 1.5px solid #4ade80), with a "TAP TO SCAN" label in 10px uppercase at 35% white opacity below. When scanning, this is replaced by a "SCANNING…" label in #4ade80.
+
+The screen header is absolutely positioned at top-0 left-0 right-0, z-index 20, px-6 pt-12 pb-4, containing only a "SortScan" eyebrow label in 10px uppercase #3d5c42 (the h1 heading was removed per design revision).
+
+
+SCAN RESULT BOTTOM SHEET
+-------------------------
+After a scan completes, a draggable bottom sheet appears over the camera view. Collapsed state: sheet top edge at calc(100% - 320px), exposing 320px of content. Expanded state: top at 0px, full screen. Transition: top 0.35s cubic-bezier(0.32, 0.72, 0, 1) when not dragging. Sheet is rounded-t-3xl, uses theme.card background, 1px theme.cardBorder border on left/top/right (no bottom border). Drag threshold to snap between states is 60px of travel in either direction. Drag handles both mouse and touch events with touchAction: none.
+
+At the top of the sheet is a drag handle zone (pt-3 pb-1, flex center) with a 40×4px rounded-full pill in theme.handleBar color.
+
+When expanded, a semi-transparent scrim (rgba(0,0,0,0.6)) fades in behind the sheet over 0.3s. Tapping the scrim dismisses the result.
+
+Scrollable sheet content (px-6 pb-8, no scrollbar) in order from top:
+1. Item header row: 5xl emoji + flex-1 column with 10px uppercase "IDENTIFIED ITEM" eyebrow in textMuted + 24px font-semibold item name in theme.text.
+2. Bin badge card: rounded-2xl, px-5 py-4, flex row 16px gap, bin's dark background and border; contains 3xl bin emoji + column with 10px "SORT INTO" eyebrow (bin color at 70% opacity) + 20px bin label (bin color, full opacity) + 12px description text (bin color at 60% opacity).
+3. "Why?" detail card: rounded-2xl, theme.bgInput background, theme.cardBorder border, px-5 py-4; 10px uppercase "WHY?" label in textMuted + 14px leading-relaxed body text in theme.textBody.
+4. "↑ Swipe up for details" hint in 12px textSubtle — only shown when sheet is collapsed.
+5. Two side-by-side buttons (flex gap-3, flex-1 each): "Scan another" (bgInput background, primary color text, cardBorder border) and "View history" (primary background, primaryBg text). Both are py-3.5 rounded-xl text-sm font-medium.
+6. Full-width ghost "Report incorrect sort" button in textMuted, 14px, centered, with a 14px circle-info SVG icon (circle + vertical line + dot).
+
+
+REPORT INCORRECT SORT MODAL
+----------------------------
+A second bottom sheet over the result sheet with theme.scrimOpacity scrim. Sheet is rounded-t-3xl in theme.card with a drag handle pill in handleBar. Content: 18px font-semibold heading "Report incorrect sort"; 14px paragraph with item name bolded in textBody; two bin option buttons (all bins except the current one), each rounded-2xl px-5 py-4 with bin's dark background/border, 2xl emoji, and base font-medium label in the bin's accent color; ghost "Cancel" button in textMuted. On confirmation, transitions to: ✅ emoji, 18px green "Thanks for the feedback!" heading, 14px textMuted copy, and a "Close" button (bgInput background, primary text, cardBorder border).
+
+
+HISTORY SCREEN
+--------------
+Background is theme.bg. Header: "SortScan" eyebrow + "Sort History" h1. Below the header is a 3-column stats grid (gap-2, px-6 pb-5): one card per bin (Compost / Recycling / Garbage), each rounded-xl px-3 py-3 in the bin's background color with a faint border (bin dot color at 13% opacity), showing a 20px bold count and a 10px uppercase label at 60% opacity. In light mode the bin card backgrounds and text use the adapted light-mode bin palette.
+
+List body is flex-1 overflow-y-auto px-6 pb-6, scrollbarWidth none. Each history row is rounded-2xl px-4 py-3.5 in theme.card with theme.cardBorder border, flex row 16px gap: 2xl emoji, flex-1 column (14px font-medium item name truncated + 12px timestamp in textMuted), and a rounded-lg badge (px-2.5 py-1, 10px uppercase font-semibold tracking-wider) in the bin's adapted colors. Rows animate in with fadeSlideIn keyframe (opacity 0→1, translateY 6px→0) staggered at 30ms per item index.
+
+
+SETTINGS SCREEN
+---------------
+Header matches eyebrow + h1 pattern ("Settings"). Body is flex-1 overflow-y-auto px-6 pb-8, scrollbarWidth none. Content organized into labeled sections with 10px uppercase tracking-[0.18em] section labels at 50% opacity.
+
+WASTE RULES REGION section contains four elements:
+  1. Location detection button (rounded-2xl, px-5 py-4, theme.card bg): icon emoji (📡/⏳/✅/🚫) + title text + subtitle text; border changes from cardBorder → success green (#2a5c35 dark / #86efac light) on success, or red on denied. Shows a 16px animated spinner (border-2 animate-spin, primary color, transparent top) while loading.
+  2. Region selector button (rounded-2xl, px-5 py-4, theme.card bg, cardBorder): 📍 emoji + "CURRENT REGION" eyebrow in textMuted + region name in theme.text + 16px chevron-right SVG in textMuted.
+  3. 12px hint text in textSubtle below the selector.
+  4. "Contribute to your region" link row (rounded-2xl, theme.card, cardBorder): 🗺️ emoji + title + subtitle (interpolates selected region name) + 14px external-link SVG in textMuted.
+
+APPEARANCE section: single card row with "Mode" label in textBody + segmented Dark/Light control. The control is a flex container (rounded-xl, p-0.5 gap-0.5, bgInput background). Each segment button is px-3 py-1.5 text-xs rounded-lg with mode emoji + capitalized label. Active segment: theme.card background, subtle box-shadow (0 1px 3px rgba(0,0,0,0.15)), primary color text. Inactive: transparent background, textMuted text. Transition is 200ms on all properties.
+
+PREFERENCES section: rounded-2xl card with three toggle rows separated by cardBorder dividers. Each row is px-5 py-4 with 14px textBody label and a 44×26px toggle. Toggle pill radius 13px. Background: primary color when on, toggleTrack when off. Thumb is 18×18px circle at left:4px (off) or left:22px (on), color primaryBg (on) or toggleThumb (off), animating over 200ms.
+
+SUPPORT section: rounded-2xl card with two link rows separated by a cardBorder divider. "Submit feedback" row: 💬 emoji + title + subtitle + chevron-right. "Buy me a coffee" row: ☕ emoji + title + subtitle + external-link icon. Both in theme.card background, text in theme.text.
+
+ABOUT section: rounded-2xl card (theme.card, cardBorder) with "Version" → "1.0.0" and "Database" → "Up to date" rows, the latter in primary accent color, separated by a 1px cardBorder hairline.
+
+
+REGION PICKER MODAL
+-------------------
+z-50 absolute overlay with theme.scrimOpacity behind it. Bottom sheet: maxHeight 75vh, rounded-t-3xl, theme.bgAlt background, cardBorder. Drag handle pill at top. 18px "Select Region" heading. Search row: rounded-xl, px-4 py-3, bgInput background, cardBorder border; 16px search SVG in textMuted, text input (theme.text, transparent bg, no outline), ×-clear button in textMuted when query is non-empty. Scrollable region list (scrollbarWidth none, gap-1): selected region is segmentActive background + segmentActiveBorder border + primary text + 16px checkmark SVG; unselected regions are transparent background + theme.text label. No-match state shows 14px centered textMuted message.
+
+
+INTERACTION & MOTION SUMMARY
+-----------------------------
+- All tab/icon/toggle color transitions: transition-all duration-200 (200ms)
+- Scan line animation: requestAnimationFrame, full sweep every 2000ms
+- Result sheet snap animation: cubic-bezier(0.32, 0.72, 0, 1), 350ms
+- Scrim fade: transition-opacity duration-300 (300ms)
+- History row stagger: fadeSlideIn keyframe, 30ms delay per item (opacity 0→1, translateY 6px→0)
+- Drag: mouse + touch events, touchAction: none, 60px snap threshold
+- Global: -webkit-tap-highlight-color: transparent on all elements
+- Global: scrollbars hidden via scrollbarWidth: none + ::-webkit-scrollbar { display: none }

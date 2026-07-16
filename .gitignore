@@ -36,6 +36,15 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# EAS / Apple credentials
+credentials.json
+
+# Microsoft Office lock files (docs/Bingo_PRD.docx is tracked; these are transient)
+~$*
+
+# stray logs
+*.log
+
 example
 
 # generated native folders
@@ -47,3 +56,4 @@ example
 /.vscode
 AGENTS.md
 CLAUDE.md
+scripts/ios-dev-build.sh
