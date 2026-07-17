@@ -6,6 +6,7 @@ import { Wordmark } from "@/components/Wordmark";
 import { clearScanHistory } from "@/lib/db";
 import { seedScanHistory } from "@/lib/devSeed";
 import { confirmDestructive, notify } from "@/lib/dialogs";
+import { useScanSettings, type ScanMode } from "@/lib/scanSettings";
 import { accent, FONT, radii, useTheme, type ThemePreference } from "@/lib/theme";
 
 // Light first: it's the brand's primary mode.
@@ -15,8 +16,14 @@ const MODES: { name: ThemePreference; label: string }[] = [
   { name: "system", label: "System" },
 ];
 
+const SCAN_MODES: { name: ScanMode; label: string }[] = [
+  { name: "continuous", label: "Auto-scan" },
+  { name: "tap", label: "Tap to scan" },
+];
+
 export default function SettingsScreen() {
   const { theme, name, preference, setPreference } = useTheme();
+  const { scanMode, setScanMode } = useScanSettings();
   const db = useSQLiteContext();
 
   const confirmClearHistory = () => {
@@ -86,6 +93,48 @@ export default function SettingsScreen() {
               );
             })}
           </View>
+        </View>
+
+        <Text style={[styles.sectionLabel, { color: theme.textMuted }, styles.sectionSpacer]}>
+          Scanning
+        </Text>
+        <View style={[styles.stackCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+          <View style={[styles.segment, { backgroundColor: theme.bgInput }]}>
+            {SCAN_MODES.map((mode) => {
+              const active = scanMode === mode.name;
+              return (
+                <Pressable
+                  key={mode.name}
+                  style={[
+                    styles.segmentButtonWide,
+                    active && {
+                      backgroundColor: theme.segmentActiveBg,
+                      borderColor: theme.segmentActiveBorder,
+                      borderWidth: 1,
+                    },
+                  ]}
+                  onPress={() => setScanMode(mode.name)}
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      {
+                        fontFamily: active ? FONT.utilityStrong : FONT.utility,
+                        color: active ? accent[name] : theme.textMuted,
+                      },
+                    ]}
+                  >
+                    {mode.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={[styles.rowHint, { color: theme.textMuted }]}>
+            {scanMode === "continuous"
+              ? "Scans on its own — points the camera at an item and shows the result once it's confident. Heavier on the camera."
+              : "Identifies an item only when you tap. Lighter, so the preview stays smooth."}
+          </Text>
         </View>
 
         <Text style={[styles.sectionLabel, { color: theme.textMuted }, styles.sectionSpacer]}>
@@ -177,6 +226,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
+  // Vertical card: a full-width control stacked above its explanatory hint.
+  stackCard: {
+    borderRadius: radii.card,
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    gap: 12,
+  },
   segment: {
     flexDirection: "row",
     borderRadius: radii.button,
@@ -190,7 +247,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "transparent",
   },
+  // Full-width variant: each option shares the row evenly (used by the Scanning segment,
+  // whose labels are too wide to sit inline next to a row label).
+  segmentButtonWide: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 8,
+    borderRadius: radii.button,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
   segmentText: { fontSize: 11, letterSpacing: 0.4 },
+  rowHint: {
+    fontFamily: FONT.body,
+    fontSize: 12,
+    lineHeight: 17,
+  },
   note: {
     fontFamily: FONT.body,
     fontSize: 12,

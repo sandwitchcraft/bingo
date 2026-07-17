@@ -14,7 +14,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BIN_LABEL, binColor, binSurface } from "@/lib/bins";
-import { formatItemName, getBinForItem } from "@/lib/regionData";
+import { formatItemName, resolveScanResult } from "@/lib/regionData";
 import { useScanResult } from "@/lib/scanResult";
 import { FONT, radii, useTheme } from "@/lib/theme";
 
@@ -113,9 +113,7 @@ export function ScanResultSheet() {
 
   if (!visible || !activeItemKey) return null;
 
-  const result = getBinForItem(activeItemKey);
-  if (!result) return null;
-
+  const result = resolveScanResult(activeItemKey);
   const surface = binSurface(result.bin);
   const accent = binColor(result.bin);
   const itemName = formatItemName(activeItemKey);

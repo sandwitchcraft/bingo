@@ -21,17 +21,24 @@ export function getBinForItem(itemKey: string): BinResult | null {
   return (item as BinResult) ?? null;
 }
 
-export function getItemKeys(): string[] {
-  return Object.keys(sortingData.items);
-}
+// Notes shown for a recognized object that isn't in the region's rules. Temporary: while
+// the bundled model is the COCO base detector (see classifier.ts), it names generic objects
+// that no region lists, so those all land here.
+const CONSULT_GUIDE_NOTES =
+  "This item isn't in the local sorting rules yet. Check your municipality's disposal guide to be sure where it goes.";
 
 /**
- * Placeholder stand-in for the classifier: returns any item the current region
- * knows about. Delete once the ML model is wired in and returns a real label.
+ * Resolve a scan to a displayable result. Real region rule when the key is known; otherwise
+ * a "consult local guide" fallback so every recognized object still produces a result and
+ * a history row. Used by the scan flow and the result sheet — `getBinForItem` itself stays
+ * strict (null for unknown) so genuine lookups elsewhere aren't masked.
  */
-export function getRandomItemKey(): string {
-  const keys = getItemKeys();
-  return keys[Math.floor(Math.random() * keys.length)];
+export function resolveScanResult(itemKey: string): BinResult {
+  return getBinForItem(itemKey) ?? { bin: "consult_local_guide", notes: CONSULT_GUIDE_NOTES };
+}
+
+export function getItemKeys(): string[] {
+  return Object.keys(sortingData.items);
 }
 
 export function formatItemName(itemKey: string): string {

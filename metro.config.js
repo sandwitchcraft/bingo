@@ -9,6 +9,10 @@ const config = getDefaultConfig(__dirname);
 // as an asset by default, so the import fails to resolve.
 config.resolver.assetExts.push("wasm");
 
+// The TFLite model is loaded via require() and handed to react-native-fast-tflite as a
+// bundled asset; Metro won't bundle a .tflite unless it's registered as an asset type.
+config.resolver.assetExts.push("tflite");
+
 // wa-sqlite talks to its worker over SharedArrayBuffer, which browsers only expose to
 // cross-origin-isolated documents. Without these two headers the bundle resolves but
 // SharedArrayBuffer is undefined at runtime, so the database fails to open.

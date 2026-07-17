@@ -23,14 +23,18 @@
           }
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "react-native-fast-tflite"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
     "ios": {
-      "bundleIdentifier": "com.anonymous.Bingo"
+      "bundleIdentifier": "com.anonymous.Bingo",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Bin-go uses the camera to identify the item you're scanning and show which bin it goes in. Nothing leaves your device."
+      }
     }
   }
 }

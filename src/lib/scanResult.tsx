@@ -2,7 +2,7 @@ import { useSQLiteContext } from "expo-sqlite";
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
 import { insertScan } from "@/lib/db";
-import { getBinForItem, getRegionName } from "@/lib/regionData";
+import { getRegionName, resolveScanResult } from "@/lib/regionData";
 
 type ScanResultContextValue = {
   activeItemKey: string | null;
@@ -25,9 +25,9 @@ export function ScanResultProvider({ children }: { children: ReactNode }) {
       showResult: (itemKey: string) => {
         setActiveItemKey(itemKey);
 
-        const result = getBinForItem(itemKey);
-        // The sheet renders nothing for an unknown key, so there's no outcome to log.
-        if (!result) return;
+        // resolveScanResult always returns a result (real rule, or the consult-local-guide
+        // fallback for a recognized-but-unlisted object), so every scan logs a row.
+        const result = resolveScanResult(itemKey);
 
         // Fire-and-forget: a failed write must never block or interrupt showing the
         // result. The catch isn't optional — an unhandled rejection redboxes in dev.

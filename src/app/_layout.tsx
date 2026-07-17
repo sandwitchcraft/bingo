@@ -15,6 +15,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ScanResultSheet } from "@/components/ScanResultSheet";
 import { DATABASE_NAME, DATABASE_OPTIONS, migrateDbAsync } from "@/lib/db";
 import { ScanResultProvider } from "@/lib/scanResult";
+import { ScanSettingsProvider } from "@/lib/scanSettings";
 import { resolveTheme, THEMES, ThemeContext, type ThemePreference } from "@/lib/theme";
 
 export default function RootLayout() {
@@ -67,12 +68,14 @@ export default function RootLayout() {
           options={DATABASE_OPTIONS}
           onInit={migrateDbAsync}
         >
-          <ScanResultProvider>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(tabs)" />
-            </Stack>
-            <ScanResultSheet />
-          </ScanResultProvider>
+          <ScanSettingsProvider>
+            <ScanResultProvider>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="(tabs)" />
+              </Stack>
+              <ScanResultSheet />
+            </ScanResultProvider>
+          </ScanSettingsProvider>
         </SQLiteProvider>
       </ThemeContext.Provider>
     </GestureHandlerRootView>
