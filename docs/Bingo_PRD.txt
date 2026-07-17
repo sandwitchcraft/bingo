@@ -1,0 +1,85 @@
+Bin-go
+Product Requirements Document
+Version 1.0  •  Draft  •  July 10, 2026
+
+1. Overview
+Bin-go is a mobile app that lets users scan an item with their camera, automatically identify it, and receive the correct waste disposal bin (recycling, compost, garbage, or hazardous/e-waste) based on their region's specific rules. Disposal guidelines vary significantly by municipality, so Bin-go removes the guesswork by combining on-device object recognition with a curated, region-aware rules database.
+1.1 Problem Statement
+Waste sorting rules differ by city, province, and country, and are often confusing or inconsistently communicated. Users frequently guess incorrectly, leading to contamination of recycling streams and improper disposal of hazardous materials.
+1.2 Goals (MVP)
+•	Let a user scan a single item and receive an accurate bin recommendation for their selected region.
+•	Support one initial region (Ontario, province-wide rules) with a small starter set of item categories.
+•	Work fully offline for scanning, recognition, and region rule lookups after initial setup.
+•	Keep infrastructure and hosting costs at $0 using free-tier tooling.
+1.3 Non-Goals (MVP)
+•	Multi-item detection in a single frame (stretch goal, not MVP).
+•	User accounts, cloud-synced history, or social features.
+•	City-level or county-level rule granularity beyond Ontario province-wide.
+2. Platform & Tech Stack
+Layer	Choice	Notes
+Framework	React Native (via Expo)	Managed workflow; avoids Xcode/Android Studio for day-to-day dev
+Build/Deploy	EAS Build + EAS Update	Free tier: 15 iOS + 15 Android builds/mo, 1,000 MAUs for OTA updates
+Camera	expo-camera	Native camera access, works within Expo managed workflow
+On-device ML	TensorFlow Lite / Core ML (via transfer learning)	Custom-trained classifier on a starter item set
+Local settings storage	AsyncStorage	Key-value store for preferences (selected region, units, theme)
+Local history storage	SQLite (expo-sqlite)	Relational, growing scan history data
+Region rules storage (device)	Local JSON per region	Small dataset; loaded into memory, no DB overhead needed at this scale
+Region rules hosting (public)	GitHub Pages (static JSON)	Free, versioned via git, CDN-backed for update checks/downloads
+Geocoding	Reverse geocoding (e.g. Nominatim) or manual selection	Device GPS gives lat/long only — region name resolution requires either an online geocoding call or offline boundary data
+
+3. Core Features
+3.1 Camera & Scanning
+•	Single-item scan only (no multi-object detection in MVP).
+•	Camera opens via expo-camera; user captures or frames one item.
+•	Captured frame is passed to the on-device ML classifier for recognition.
+3.2 On-Device Object Recognition
+A custom image classifier trained via transfer learning on a pretrained base model (e.g. MobileNet), exported to TensorFlow Lite (Android) and Core ML (iOS). Runs fully on-device — no network call required for recognition.
+Starter category list for MVP (example set, expandable):
+•	Plastic bottle
+•	Aluminum can
+•	Glass jar/bottle
+•	Cardboard/paper
+•	Food waste / compostable
+•	Battery (routed to “consult local guide”)
+•	Electronics/e-waste (routed to “consult local guide”)
+3.3 Region Selection
+•	MVP region scope: Ontario, Canada — province-wide rules only (no city-level granularity yet).
+•	User can manually select their region, or grant location access for automatic detection.
+•	Location flow: device GPS returns lat/long only → reverse geocoding (online) resolves this to a region name → matched against the local rules database.
+•	If offline or location denied, user falls back to manual region selection.
+•	Rule lookup priority (for future multi-region support): city → district/county → state/province → country, most specific match wins.
+3.4 Bin Result & “Consult Local Guide” Items
+•	Recognized item is matched against the active region's rules to display the correct bin (recycling, compost, garbage, hazardous).
+•	Items with high regional variability (e-waste, batteries, hazardous materials) display a “Consult your local guide” message.
+•	Where available, this message includes an outbound link to the relevant regional disposal resource/website.
+3.5 Region Rules Data & Updates
+•	Rules dataset structured as item → bin → description/notes, stored as JSON.
+•	Hosted publicly on GitHub Pages as versioned static files, one per region.
+•	App checks the hosted version number against its local copy and prompts the user to download updates — no app store review required for data updates.
+•	Stretch goal: allow users to pre-download additional regions for offline use (similar to offline maps), each tracked and updated independently.
+3.6 On-Device User Data
+•	Settings/preferences (selected region, units, theme) stored locally via AsyncStorage.
+•	Scan history (item, bin result, region, timestamp) stored locally via SQLite — relational and query-able, no cloud sync in MVP.
+•	No user accounts or server-side storage of personal data in MVP.
+4. Data Architecture
+4.1 Region Rules (example schema)
+Hosted as versioned JSON, one file per supported region:
+{ "region": "Ontario", "version": 1, "last_updated": "2026-07-10", "items": { "plastic_bottle": { "bin": "recycling", "notes": "Rinse before disposal" }, "battery": { "bin": "consult_local_guide", "notes": "Drop off at designated e-waste site", "link": "https://example-region-link.ca" } } }
+4.2 Scan History (SQLite schema)
+CREATE TABLE scan_history (id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, bin_result TEXT, region TEXT, scanned_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+5. Infrastructure & Cost
+Service	Free Tier Limit	Impact on Bin-go
+EAS Build	15 iOS + 15 Android builds/month	Sufficient for solo dev/test cycles
+EAS Update (OTA)	1,000 MAUs, 100 GiB bandwidth/month	Covers JS-level bug fixes/UI tweaks; overflow users simply wait until next cycle or a plan upgrade
+GitHub Pages	Free, unlimited for public static files	Hosts versioned region rules JSON
+Reverse geocoding (Nominatim)	Free, rate-limited	Used only during region auto-detection
+Apple Developer Program	$99/year (required by Apple, not Expo)	Required for any App Store submission
+Google Play Developer	$25 one-time (required by Google)	Required for any Play Store submission
+
+Note: the 1,000 MAU limit applies only to users receiving OTA JavaScript updates in a given month, not to total app installs or users, which are unlimited. If exceeded, the app continues functioning normally; affected users simply receive the update on their next app open after the monthly reset, or immediately if the plan is upgraded ($19/mo Starter tier).
+6. Open Items & Future Considerations
+•	Expand item category list beyond the MVP starter set.
+•	Expand region coverage beyond Ontario, introducing city/district-level rule overrides.
+•	Evaluate offline boundary/point-in-polygon geocoding to remove the online dependency for region auto-detection.
+•	Evaluate multi-item detection per frame as a post-MVP enhancement.
+•	Evaluate MMKV or WatermelonDB if performance needs outgrow AsyncStorage/expo-sqlite.

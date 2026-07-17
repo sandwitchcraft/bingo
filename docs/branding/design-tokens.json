@@ -1,0 +1,67 @@
+{
+  "brand": "Bin-go",
+  "version": 1,
+  "logo": {
+    "wordmark": "bin·go",
+    "case": "lowercase",
+    "separator": "middle-dot (·)",
+    "separator_color": "sprout",
+    "rule": "Always lowercase with the middle dot. Do not use title case, sentence case, hyphen separator, or any icon/symbol alongside the wordmark."
+  },
+  "color": {
+    "sprout": { "hex": "#39B378", "role": "Primary brand accent — CTAs, links, logo dot" },
+    "sproutDeep": { "hex": "#218A5A", "role": "Primary button background (deeper than raw Sprout for a calmer, less loud CTA)" },
+    "harbor": { "hex": "#3E8BD6", "role": "Recycling bin indicator only — do not use as a general brand accent" },
+    "clay": { "hex": "#D77930", "role": "Garbage indicator only. Deepened from the original #DB7B31, which measured 2.92:1 on paper and missed the 3.0:1 AA floor for large text; #D77930 clears it at 3.01:1 and is visually indistinguishable." },
+    "ink": { "hex": "#141A18", "role": "Dark mode surface background; light mode primary text. Deepened from the original #1E2B27, which read visibly dark-green on a full screen; the green family is retained but much darker. This also lifts the consult-local-guide indicator to 3.14:1 on dark." },
+    "slate": { "hex": "#5B6B66", "role": "Secondary text, captions, metadata; also the consult-local-guide indicator" },
+    "paper": { "hex": "#FAFAF8", "role": "Light mode background" },
+    "line": { "hex": "#E7E5DE", "role": "Borders, dividers, hairlines" },
+    "compost": { "hex": "#218A5A", "role": "Compost/organics bin indicator — reuses sproutDeep" },
+    "consultLocalGuide": { "hex": "#5B6B66", "role": "Consult-local-guide indicator — reuses slate. Neutral by intent: a deferral, not a disposal outcome, so it must not share garbage's clay." }
+  },
+  "typography": {
+    "display": { "family": "Manrope", "weight": 800, "usage": "Item names, large numerals, hero headings" },
+    "heading": { "family": "Manrope", "weight": 700, "usage": "Section headings, screen titles" },
+    "body": { "family": "Inter", "weight": 400, "usage": "Paragraphs, instructions, descriptions" },
+    "bodyEmphasis": { "family": "Inter", "weight": 600, "usage": "Inline emphasis within body copy only" },
+    "utility": { "family": "IBM Plex Mono", "weight": 500, "usage": "All labels, eyebrows, metadata, timestamps, version tags — replaces any Inter-weight label style" },
+    "utilityStrong": { "family": "IBM Plex Mono", "weight": 600, "usage": "Emphasized utility text, e.g. active-state labels" }
+  },
+  "radii": {
+    "button": "999px (full pill)",
+    "card": "18px",
+    "iconBadge": "50% (circular)"
+  },
+  "components": {
+    "buttonPrimary": { "background": "sproutDeep", "text": "#FFFFFF", "shape": "pill" },
+    "buttonSecondary": { "background": "rgba(57,179,120,0.10)", "text": "sproutDeep", "shape": "pill", "border": "none" }
+  },
+  "pictograms": {
+    "style": "single-weight line icon, ~1.8px stroke, no fill except the background badge",
+    "badge": "circular, 56px, tinted at 14-16% opacity of the bin-outcome color it represents (not a fixed material color)",
+    "examples": {
+      "bottle": "harbor",
+      "can": "harbor",
+      "jar": "harbor",
+      "food_waste": "sproutDeep",
+      "garbage_item": "clay",
+      "battery": "slate"
+    }
+  },
+  "voice": {
+    "tone": "instructional, direct, no exclamation points, no filler enthusiasm",
+    "rules": [
+      "State the action, not encouragement: 'Rinse before disposal.' not 'Give it a quick rinse first!'",
+      "Errors state what happened and how to fix it, no apology: 'Item not recognized. Try a clearer angle.'",
+      "Confirmations are terse: 'Scanned. Saved to history.' not 'Great job scanning your first item!'"
+    ]
+  },
+  "excluded": [
+    "No stamp/badge motifs",
+    "No bingo/game visual references (cards, grids, dabbers)",
+    "No amber/yellow as an accent color",
+    "No scan-line or beacon animation",
+    "No mascot or illustrated characters"
+  ]
+}

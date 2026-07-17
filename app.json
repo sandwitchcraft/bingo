@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Bingo",
+    "slug": "Bingo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "bingo",
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FAFAF8",
+          "dark": {
+            "backgroundColor": "#141A18"
+          }
+        }
+      ],
+      "expo-sqlite"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "ios": {
+      "bundleIdentifier": "com.anonymous.Bingo"
+    }
+  }
+}
