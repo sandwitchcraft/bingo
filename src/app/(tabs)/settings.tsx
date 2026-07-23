@@ -403,11 +403,11 @@ export default function SettingsScreen() {
 
         {/* Ships in release builds, unlike the seeder above. Sorts a random item from the
             *active* region's rules — the check that the app is reading the region you
-            picked. The camera can't do that job while the bundled model is COCO: it names
-            objects no region lists, so every real scan lands on the check-local-guide
-            fallback and never exercises a rule. It's the only way a tester on a TestFlight
-            build can see a real bin result, which is why it isn't dev-gated. Retire it with
-            `getRandomItemKey` once the trained classifier lands. */}
+            picked. The camera covers part of that job now that the bundled model is an
+            ImageNet classifier — bottles, cups, cardboard and apples reach real rules — but
+            it still can't produce the material-dependent keys (styrofoam, takeout containers,
+            batteries), so this stays the only way to exercise those. Not dev-gated for the
+            same reason. Retire it with `getRandomItemKey` once the trained classifier lands. */}
         <View
           style={[
             styles.card,

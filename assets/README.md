@@ -8,8 +8,7 @@ Everything here is compiled into the app binary. Imported through the `@/assets/
 data/                 offline fallback copies of region rules
   canada/ontario/toronto/toronto.json
 models/
-  model.tflite        the on-device classifier (bundled)
-  modelV2.tflite      the trained waste classifier — present but NOT wired up
+  efficientnet-lite0-int8.tflite   the on-device classifier (bundled)
 ```
 
 ## `data/` — why the deep folder path
@@ -23,24 +22,23 @@ copy. Rules come from bingoDB at runtime; this exists only so a first launch wit
 network is still useful. It is parsed by `parseRegionRules` like anything fetched —
 there is deliberately no second schema in the codebase.
 
-## `models/model.tflite` — the bundled model
+## `models/efficientnet-lite0-int8.tflite` — the bundled model
 
-**A stand-in, not the real thing.** It's EfficientDet Lite0, the pretrained COCO object
-detector (320x320 uint8 in; boxes/classes/scores/count out) — not the transfer-learned
-waste classifier the PRD calls for. Because COCO's classes aren't the region's item keys,
-every detection currently resolves to a "check local guide" result. See
-`src/features/scan/classifier.ts`.
+**A stand-in, not the real thing.** EfficientNet-Lite0 trained on ImageNet-1k and quantized
+to bytes (224x224 in, one `[1, 1000]` score vector out) — not the transfer-learned waste
+classifier the PRD calls for. Downloaded from Google's MediaPipe model bucket:
 
-It stays wired up deliberately: it's a known-good load for exercising the on-device
-inference path (frame → resize → uint8 RGB → `runSync` → parse) independently of whether
-the trained model is ready.
+```
+https://storage.googleapis.com/mediapipe-models/image_classifier/efficientnet_lite0/int8/1/efficientnet_lite0.tflite
+```
 
-## `models/modelV2.tflite` — not wired up
+Unlike the COCO detector it replaced (2026-07-23), ImageNet's vocabulary genuinely overlaps
+the region item keys — "pop bottle", "beer bottle", "coffee mug", "carton", "Granny Smith"
+and friends map to real keys via `LABEL_TO_ITEM_KEY` in `src/features/scan/classifier.ts`,
+so common scans produce real bin results. Material distinctions (styrofoam vs paper) and
+batteries are still beyond it and fall through to "check local guide".
 
-The MobileNetV2 224 waste classifier. Present in the repo but nothing requires it — the
-scan screen still loads `model.tflite`. Switching to it is not a one-line change: it's a
-classifier, not a detector, so it needs float32 0–1 input at 224x224, argmax over a single
-`[1, N]` output instead of the detection-quartet parsing, a written-down class order (no
-labelmap in the metadata), and a reconciliation between its class names and bingoDB's item
-keys — `battery-disposable` vs `disposable-batteries`, `styrofoam-container` vs
-`styrofoam-takeout-container`, and `aluminum-can`/`paper-printer`, which no region lists.
+The label list lives in `src/features/scan/imagenetLabels.ts`, extracted verbatim from the
+`labels_without_background.txt` file embedded in this model's own TFLite metadata (`unzip -o`
+the `.tflite` to re-extract it). It's a TS array rather than a bundled `.txt` because the
+frame worklet reads it on the frame thread, where nothing can be awaited.

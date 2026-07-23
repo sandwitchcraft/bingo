@@ -7,7 +7,7 @@
  * when the user taps. Either way "committing" means handing an item key to `showResult`,
  * which writes the history row and raises the result sheet.
  *
- * The knobs (thresholds, frame interval, label→key mapping, output-tensor layout) all live
+ * The knobs (thresholds, frame interval, label→key mapping, tensor dtypes) all live
  * in `@/features/scan/classifier` — this file is the camera, the worklet plumbing, and the
  * viewfinder chrome only.
  *
@@ -34,24 +34,24 @@ import { scheduleOnRN } from "react-native-worklets";
 import { formatItemName } from "@/features/region/regionData";
 import {
   AUTO_SCAN_THRESHOLD,
-  COCO_LABELS,
-  COCO_PLACEHOLDER,
   INFERENCE_EVERY_N_FRAMES,
   MODEL_INPUT_SIZE,
   SCORE_THRESHOLD,
   labelToItemKey,
-  resolveOutputLayout,
+  resolveModelIO,
   type Detection,
 } from "@/features/scan/classifier";
+import { IMAGENET_LABELS } from "@/features/scan/imagenetLabels";
 import { useScanResult } from "@/features/scan/scanResult";
 import { useScanSettings } from "@/features/scan/scanSettings";
 import { Wordmark } from "@/ui/Wordmark";
 import { colors, FONT, radii } from "@/ui/theme";
 
-// The bundled base model (EfficientDet Lite0) — see src/features/scan/classifier.ts for why this is
-// a COCO detector standing in for the not-yet-trained waste model. require() hands Metro a
-// bundled-asset handle; `tflite` is registered as an asset extension in metro.config.js.
-const MODEL_SOURCE = require("@/assets/models/model.tflite");
+// The bundled base model (EfficientNet-Lite0, ImageNet-1k, byte-quantized) — see
+// src/features/scan/classifier.ts for what it can and can't map onto region item keys.
+// require() hands Metro a bundled-asset handle; `tflite` is registered as an asset extension
+// in metro.config.js.
+const MODEL_SOURCE = require("@/assets/models/efficientnet-lite0-int8.tflite");
 
 // The scan screen is a fixed dark environment regardless of app theme — it sits over
 // the camera feed, so it uses brand ink rather than the active theme's background.
@@ -139,12 +139,20 @@ function NativeScanScreen() {
 
   const model = useTensorflowModel(MODEL_SOURCE, []);
   const loadedModel = model.state === "loaded" ? model.model : null;
-  // Output tensor order isn't guaranteed across exports, so resolve it by shape once when
-  // the model loads. Plain numbers, captured into the worklet below.
-  const outputLayout = useMemo(
-    () => (loadedModel ? resolveOutputLayout(loadedModel) : null),
-    [loadedModel],
-  );
+  // Tensor dtypes and the label offset aren't guaranteed across model swaps, so resolve them
+  // once at load. Plain values, captured into the worklet below.
+  const modelIO = useMemo(() => (loadedModel ? resolveModelIO(loadedModel) : null), [loadedModel]);
+
+  // Reading a quantized tensor as the wrong type produces confident-looking wrong labels
+  // rather than an error, so trace the real contract once whenever the model file changes.
+  useEffect(() => {
+    if (__DEV__ && loadedModel) {
+      console.log("[scan] model io", {
+        inputs: loadedModel.inputs.map((t) => `${t.dataType}[${t.shape.join(",")}]`),
+        outputs: loadedModel.outputs.map((t) => `${t.dataType}[${t.shape.join(",")}]`),
+      });
+    }
+  }, [loadedModel]);
 
   const reportFps = useCallback((value: number) => setFps(value), []);
   const reportDropped = useCallback(
@@ -194,7 +202,6 @@ function NativeScanScreen() {
           windowStart: number;
           frameIndex: number;
           servicedGen: number;
-          scoresIsA?: boolean;
         };
       };
       // Wall clock, not frame.timestamp: on iOS the presentation timestamp is in seconds,
@@ -220,17 +227,27 @@ function NativeScanScreen() {
       const wantInference = tapMode
         ? captureGen !== s.servicedGen
         : s.frameIndex % INFERENCE_EVERY_N_FRAMES === 0;
-      if (loadedModel == null || outputLayout == null || !wantInference) {
+      if (loadedModel == null || modelIO == null || !wantInference) {
         frame.dispose();
         return;
       }
       if (tapMode) s.servicedGen = captureGen;
 
-      // Preprocess: frame → Image (one CPU copy) → exact square → uint8 RGB [1,S,S,3].
-      // EfficientDet Lite0 takes raw 0–255 bytes, so there's no normalization to apply.
+      // Preprocess: frame → Image (one CPU copy) → centre square → exact size → byte RGB
+      // [1,S,S,3]. EfficientNet-Lite0's quantized build takes raw bytes, so the only
+      // normalization is the int8 shift below (skipped entirely for a uint8 input).
       const image = HybridFrameConverter.convertFrameToImage(frame);
       frame.dispose(); // done with the frame the instant its pixels are copied out
-      const raw = image.resize(MODEL_INPUT_SIZE, MODEL_INPUT_SIZE).toRawPixelData();
+      // Centre-crop to the shorter edge before resizing. A detector localized its own object
+      // so a squashed frame was tolerable; a whole-frame classifier sees the distortion, and
+      // cropping also makes what the model reads match the on-screen reticle the user aims.
+      const side = Math.min(image.width, image.height);
+      const x0 = Math.floor((image.width - side) / 2);
+      const y0 = Math.floor((image.height - side) / 2);
+      const raw = image
+        .crop(x0, y0, x0 + side, y0 + side)
+        .resize(MODEL_INPUT_SIZE, MODEL_INPUT_SIZE)
+        .toRawPixelData();
       const src = new Uint8Array(raw.buffer);
       const rgb = new Uint8Array(MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * 3);
       const fmt = raw.pixelFormat; // 'BGRA' or 'ARGB' per OS endianness (see nitro-image)
@@ -251,47 +268,45 @@ function NativeScanScreen() {
         }
       }
 
+      // A signed input tensor wants the same pixels centred on zero. In two's complement,
+      // u - 128 has the byte representation u ^ 0x80, so the shift is one XOR per channel
+      // rather than a second buffer.
+      if (modelIO.inputSigned) {
+        for (let i = 0; i < rgb.length; i++) rgb[i] = rgb[i] ^ 0x80;
+      }
+
       const outputs = loadedModel.runSync([rgb.buffer]);
-      const va = new Float32Array(outputs[outputLayout.vectorA]);
-      const vb = new Float32Array(outputs[outputLayout.vectorB]);
-      const count = new Float32Array(outputs[outputLayout.count]);
+      // One [1, N] score vector. Float builds hand back probabilities already in 0–1;
+      // quantized builds hand back bytes, signed or not depending on the export. Reading it
+      // as the wrong type produces a confident wrong label rather than an error, so branch on
+      // the dtype resolved at load instead of assuming (see ModelIO in classifier.ts).
+      const scores = modelIO.outputFloat
+        ? new Float32Array(outputs[0])
+        : modelIO.outputSigned
+          ? new Int8Array(outputs[0])
+          : new Uint8Array(outputs[0]);
+      // Dequantize to 0–1 so SCORE_THRESHOLD means the same thing across all three. Signed
+      // softmax outputs use zero_point -128, so shifting by 128 lands them on the same scale.
+      const zero = modelIO.outputSigned ? -128 : 0;
+      const scale = modelIO.outputFloat ? 1 : 1 / 255;
 
-      // The two [1,N] vectors are classes and scores; tell them apart once (scores carry
-      // fractional probabilities, class indices are whole numbers) and cache the result.
-      if (s.scoresIsA === undefined) {
-        let aFractional = false;
-        let bFractional = false;
-        for (let i = 0; i < va.length; i++) {
-          if (va[i] !== Math.trunc(va[i])) {
-            aFractional = true;
-            break;
-          }
-        }
-        for (let i = 0; i < vb.length; i++) {
-          if (vb[i] !== Math.trunc(vb[i])) {
-            bFractional = true;
-            break;
-          }
-        }
-        s.scoresIsA = aFractional || !bFractional;
-      }
-      const scores = s.scoresIsA ? va : vb;
-      const classes = s.scoresIsA ? vb : va;
-
-      // Detections come back score-sorted descending. Take the highest-scoring real object
-      // that clears the threshold (skip COCO's reserved "???" slots). Every recognized
-      // object surfaces — the consult-local-guide fallback handles the ones no region lists.
-      const n = Math.min(Math.round(count[0]) || scores.length, scores.length);
-      let best: Detection | null = null;
-      for (let i = 0; i < n; i++) {
-        const score = scores[i];
-        if (score < SCORE_THRESHOLD) break;
-        const label = COCO_LABELS[Math.round(classes[i])];
-        if (label && label !== COCO_PLACEHOLDER) {
-          best = { label, score };
-          break;
+      // Classifier output isn't sorted, so this is a plain argmax over the real classes
+      // (skipping the leading background slot on models that have one). Seeded below the
+      // minimum possible score so the first class can win. Every classification surfaces —
+      // the check-local-guide fallback handles labels no region lists.
+      const offset = modelIO.labelOffset;
+      let bestIndex = -1;
+      let bestValue = -Infinity;
+      for (let i = offset; i < scores.length; i++) {
+        if (scores[i] > bestValue) {
+          bestValue = scores[i];
+          bestIndex = i;
         }
       }
+      const score = (bestValue - zero) * scale;
+      const label = bestIndex >= 0 ? IMAGENET_LABELS[bestIndex - offset] : undefined;
+      const best: Detection | null =
+        label != null && score >= SCORE_THRESHOLD ? { label, score } : null;
       // Tap mode commits the one-shot result; continuous mode updates the live label.
       scheduleOnRN(tapMode ? reportTapResult : reportDetection, best);
     },

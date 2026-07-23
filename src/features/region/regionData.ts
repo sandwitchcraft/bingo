@@ -18,9 +18,10 @@ export function getBinForItem(rules: RegionRules, itemKey: string): BinResult | 
   return rules.items[itemKey] ?? null;
 }
 
-// Notes shown for a recognized object that isn't in the region's rules. Temporary: while
-// the bundled model is the COCO base detector (see classifier.ts), it names generic objects
-// that no region lists, so those all land here.
+// Notes shown for a recognized object that isn't in the region's rules. Still load-bearing:
+// the bundled ImageNet model (see classifier.ts) names 1000 classes, only a handful of which
+// map to item keys, so everything else — plus the material distinctions it can't make at all —
+// lands here.
 const CONSULT_GUIDE_NOTES =
   "This item isn't in the local sorting rules yet. Check your municipality's disposal guide to be sure where it goes.";
 
@@ -49,9 +50,10 @@ export function getItemKeys(rules: RegionRules): string[] {
 
 /**
  * Any item key the active region knows about. Dev affordance, not a classifier stand-in:
- * it's how you confirm the app is reading the region you actually selected, since the
- * bundled COCO model can't produce real item keys and sends everything to the
- * check-local-guide fallback. Switching regions changes what this can return.
+ * it's how you confirm the app is reading the region you actually selected. The bundled
+ * ImageNet model reaches some keys now, but not the material-dependent ones
+ * (styrofoam/takeout/batteries), so this is still the only way to exercise those.
+ * Switching regions changes what this can return.
  */
 export function getRandomItemKey(rules: RegionRules): string | null {
   const keys = getItemKeys(rules);
@@ -62,7 +64,7 @@ export function getRandomItemKey(rules: RegionRules): string | null {
 /**
  * Title-cases a raw item key. Handles both separators on purpose: bingoDB keys are
  * kebab-case ("plastic-bottle"), while `labelToItemKey` in classifier.ts still emits
- * snake_case from COCO labels, and history rows written before the switch are snake_case.
+ * snake_case for model labels it can't map to a key, and older history rows are snake_case.
  */
 export function formatItemName(itemKey: string): string {
   return itemKey

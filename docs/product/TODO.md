@@ -20,20 +20,21 @@ Running punch list. Check things off as they land; add new items as they come up
 ## Scan flow
 - [x] Real on-device ML replaced the faked detected item — vision-camera frame processor +
       react-native-fast-tflite
-- [ ] Train/ship the real waste classifier. The bundled model is still COCO EfficientDet Lite0,
-      whose labels aren't item keys, so every live scan resolves to the check-local-guide
-      fallback and no region rule is ever exercised. Until then, Settings → **Sort a random
-      item** (dev-only) sorts a random key from the active region's rules — that's what
-      verifies the region data is wired. It writes a history row like any scan; Settings →
-      Clear sort history flushes them.
+- [x] Replaced the COCO detector with an ImageNet-1k classifier (EfficientNet-Lite0), so common
+      scans hit real item keys instead of every scan falling through to check-local-guide
+- [ ] Train/ship the real waste classifier. The bundled ImageNet model is still a stand-in: it
+      has no notion of material, so `styrofoam-cup`, `styrofoam-takeout-container`,
+      `cardboard-takeout-container` and `disposable-batteries` are unreachable from a scan —
+      four of the nine published keys. Bottles, cups, cardboard and apples do resolve.
       When swapping the trained model in, three things beyond the `require()` need attention:
-      its class order has to be written down app-side (there's no labelmap in the .tflite, and
-      a reorder silently names the wrong item); its input normalization has to match training
-      (0–1 for TF-Hub modules, [-1,1] for Keras `preprocess_input`); and its class names have
-      to be reconciled with bingoDB's item keys, which are close but not identical.
-- [ ] Drop `getRandomItemKey` and the "Sort a random item" row once the real model lands. It is
-      no longer dev-gated: on a release/TestFlight build it's the only way to see a real bin
-      result, since the COCO model can't produce item keys.
+      its class order has to be written down app-side (a reorder silently names the wrong item —
+      `imagenetLabels.ts` is the shape to follow); its input normalization has to match training
+      (`resolveModelIO` already branches uint8/int8, but a float model needs a real normalize
+      step added to the worklet); and its class names have to be reconciled with bingoDB's item
+      keys — extend or replace `LABEL_TO_ITEM_KEY` rather than renaming anything DB-side.
+- [ ] Revisit `getRandomItemKey` and the "Sort a random item" row. Less load-bearing now that
+      the model can produce real item keys, but still the only way to exercise a key no
+      ImageNet class maps to (the four above).
 - [ ] Wire the "Report incorrect sort" row in `ScanResultSheet` — currently a no-op placeholder
 
 ## Screens (currently stubs)

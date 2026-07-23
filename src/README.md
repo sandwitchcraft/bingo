@@ -23,7 +23,8 @@ features/
     RegionIcons.tsx    download-state glyphs for the picker
 
   scan/              camera → model → result
-    classifier.ts      model I/O: preprocessing, output parsing, thresholds, label mapping
+    classifier.ts      model I/O: tensor dtypes, thresholds, label → item-key mapping
+    imagenetLabels.ts  the bundled model's 1000 class labels, in index order
     scanResult.tsx     ScanResultProvider — the active result, and the history write
     scanSettings.tsx   continuous vs tap scan mode
     ScanResultSheet.tsx  the draggable result sheet (mounted globally)
