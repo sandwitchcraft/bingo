@@ -9,8 +9,11 @@
  * - `scanned_at` is UTC at one-second resolution — too coarse to order by, so list queries
  *   order by `id` (AUTOINCREMENT, append-only) instead. Parse it with `parseScannedAt`.
  *
- * `migrateDbAsync` is versioned through `PRAGMA user_version`; version 2 is what rewrote
- * the pre-bingoDB bin names on existing rows.
+ * `migrateDbAsync` is versioned through `PRAGMA user_version`. Earlier versions rewrote bin
+ * names on existing rows as the vocabulary churned (`compost`↔`organics`,
+ * `check-local-guide`→`consult-local-guide`); those were collapsed away on 2026-07-23 once the
+ * only device that ran them was reset, so version 1 is now the whole schema. Reintroduce the
+ * versioned chain before this ships to a second device — migrations are append-only there.
  */
 import type { SQLiteDatabase, SQLiteOpenOptions } from "expo-sqlite";
 
@@ -23,7 +26,7 @@ export const DATABASE_NAME = "bingo.db";
 // connection on every root re-render.
 export const DATABASE_OPTIONS: SQLiteOpenOptions = {};
 
-const LATEST_VERSION = 2;
+const LATEST_VERSION = 1;
 
 export async function migrateDbAsync(db: SQLiteDatabase): Promise<void> {
   // journal_mode can't change inside a transaction, so it runs first. It persists
@@ -46,16 +49,6 @@ export async function migrateDbAsync(db: SQLiteDatabase): Promise<void> {
         );
       `);
       version = 1;
-    }
-    if (version === 1) {
-      // The app adopted bingoDB's bin vocabulary. Rows written before that carry the old
-      // names, which are no longer BinType members — left alone they'd fall out of
-      // getBinCounts' `row.bin_result in counts` check and silently stop being counted.
-      await db.execAsync(`
-        UPDATE scan_history SET bin_result = 'organics' WHERE bin_result = 'compost';
-        UPDATE scan_history SET bin_result = 'check-local-guide' WHERE bin_result = 'consult_local_guide';
-      `);
-      version = 2;
     }
     // PRAGMA can't be parameterized. `version` is derived from this module's own
     // constants and never from input.
@@ -138,8 +131,8 @@ export async function getBinCounts(db: SQLiteDatabase): Promise<Record<BinType, 
   const counts: Record<BinType, number> = {
     recycling: 0,
     garbage: 0,
-    organics: 0,
-    "check-local-guide": 0,
+    compost: 0,
+    "consult-local-guide": 0,
   };
   for (const row of rows) {
     if (row.bin_result in counts) counts[row.bin_result as BinType] = row.count;

@@ -14,13 +14,13 @@ import { IMAGENET_LABELS } from "@/features/scan/imagenetLabels";
  * item keys: "pop bottle", "water bottle", "beer bottle", "wine bottle", "coffee mug",
  * "carton" and "Granny Smith" all map to keys the region files publish (see
  * `LABEL_TO_ITEM_KEY`), so common scans now produce real bin results instead of every scan
- * falling through to check-local-guide.
+ * falling through to consult-local-guide.
  *
  * What it still can't do: ImageNet has no notion of *material*. Nothing distinguishes a
  * styrofoam cup from a paper one, and there is no class for a takeout container or a
  * disposable battery — so `styrofoam-cup`, `styrofoam-takeout-container`,
  * `cardboard-takeout-container` and `disposable-batteries` keep hitting the fallback until a
- * trained model lands. Anything unmapped still surfaces as a check-local-guide result carrying
+ * trained model lands. Anything unmapped still surfaces as a consult-local-guide result carrying
  * the ImageNet label (`resolveScanResult` in `regionData.ts`), which beats "unknown object".
  */
 
@@ -57,7 +57,7 @@ export const INFERENCE_EVERY_N_FRAMES = 10;
  * ImageNet-1k label → bingoDB item key.
  *
  * Only labels that map onto a key some region file actually publishes belong here; everything
- * else falls through to the check-local-guide result carrying its ImageNet name.
+ * else falls through to the consult-local-guide result carrying its ImageNet name.
  *
  * Keys are the **verbatim** label strings from `imagenetLabels.ts`, capitalization and spacing
  * included ("Granny Smith") — the lookup is exact, so a normalized key would silently miss.

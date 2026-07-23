@@ -50,7 +50,15 @@ export type RegionRules = {
   items: Record<string, RegionItem>;
 };
 
-const BIN_TYPES: readonly BinType[] = ["recycling", "garbage", "organics", "check-local-guide"];
+const BIN_TYPES: readonly BinType[] = ["recycling", "garbage", "compost", "consult-local-guide"];
+
+/**
+ * The one place bingoDB's bin vocabulary and `BinType` disagree: the database emits
+ * `organics`, the app says `compost`. Normalizing here — at the single parse boundary every
+ * rules file passes through, bundled snapshot included — keeps that difference from leaking
+ * anywhere else, and means the DB can adopt `compost` later without a second change here.
+ */
+const BIN_WIRE_ALIASES: Record<string, BinType> = { organics: "compost" };
 
 /**
  * Bins are data, so an unrecognized value is a database change we haven't shipped for — not
@@ -58,7 +66,8 @@ const BIN_TYPES: readonly BinType[] = ["recycling", "garbage", "organics", "chec
  * keeps every downstream consumer (colors, labels, icons) total over BinType.
  */
 function toBinType(value: unknown): BinType {
-  return BIN_TYPES.includes(value as BinType) ? (value as BinType) : "check-local-guide";
+  if (typeof value === "string" && value in BIN_WIRE_ALIASES) return BIN_WIRE_ALIASES[value];
+  return BIN_TYPES.includes(value as BinType) ? (value as BinType) : "consult-local-guide";
 }
 
 function titleCase(slug: string): string {

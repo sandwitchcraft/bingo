@@ -293,7 +293,7 @@ function NativeScanScreen() {
       // Classifier output isn't sorted, so this is a plain argmax over the real classes
       // (skipping the leading background slot on models that have one). Seeded below the
       // minimum possible score so the first class can win. Every classification surfaces —
-      // the check-local-guide fallback handles labels no region lists.
+      // the consult-local-guide fallback handles labels no region lists.
       const offset = modelIO.labelOffset;
       let bestIndex = -1;
       let bestValue = -Infinity;

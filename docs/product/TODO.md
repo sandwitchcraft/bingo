@@ -21,7 +21,7 @@ Running punch list. Check things off as they land; add new items as they come up
 - [x] Real on-device ML replaced the faked detected item — vision-camera frame processor +
       react-native-fast-tflite
 - [x] Replaced the COCO detector with an ImageNet-1k classifier (EfficientNet-Lite0), so common
-      scans hit real item keys instead of every scan falling through to check-local-guide
+      scans hit real item keys instead of every scan falling through to consult-local-guide
 - [ ] Train/ship the real waste classifier. The bundled ImageNet model is still a stand-in: it
       has no notion of material, so `styrofoam-cup`, `styrofoam-takeout-container`,
       `cardboard-takeout-container` and `disposable-batteries` are unreachable from a scan —

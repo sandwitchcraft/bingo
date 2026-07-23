@@ -163,7 +163,7 @@ export function ScanResultSheet() {
         >
           {/* Item header. With no pictogram, the item name itself carries the outcome
               color — `accent` is the bin's color, so a recycling item reads Harbor,
-              organics reads sprout, and so on. */}
+              compost reads sprout, and so on. */}
           <View style={styles.itemHeader}>
             <Text style={[styles.eyebrow, { color: theme.textMuted }]}>Identified item</Text>
             <Text style={[styles.itemName, { color: accent }]}>{itemName}</Text>

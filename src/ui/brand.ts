@@ -8,7 +8,7 @@
 
 export const colors = {
   sprout: "#39B378",      // primary accent — CTAs, links, logo dot
-  sproutDeep: "#218A5A",  // primary button background + organics bin indicator
+  sproutDeep: "#218A5A",  // primary button background + compost bin indicator
   harbor: "#3E8BD6",      // recycling bin indicator ONLY — do not use as general accent
   clay: "#D77930",        // garbage indicator ONLY (deepened from #DB7B31 for AA on paper)
   alert: "#C4362B",       // error notifications ONLY — never a bin indicator, never an accent
@@ -21,15 +21,15 @@ export const colors = {
 
 // Bin outcome → color mapping. Use this, not a hardcoded switch, wherever
 // a bin result needs a color (result screen, history list, pictogram badges).
-// The keys are bingoDB's bin vocabulary verbatim (see `BinType` in bins.ts) —
-// they're data values, not names we're free to prettify.
+// The keys are `BinType` (bins.ts) — bingoDB's vocabulary except for `compost`,
+// which is the normalized form of the database's `organics`.
 export const binColors = {
   recycling: colors.harbor,
-  organics: colors.sproutDeep,
+  compost: colors.sproutDeep,
   garbage: colors.clay,
   // Consult reads slate, not clay: it isn't a disposal outcome like the other three,
   // it's a deferral, so it stays neutral rather than sharing garbage's indicator.
-  "check-local-guide": colors.slate,
+  "consult-local-guide": colors.slate,
 } as const;
 
 export const fonts = {

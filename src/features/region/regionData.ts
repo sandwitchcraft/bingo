@@ -35,7 +35,7 @@ export function resolveScanResult(rules: RegionRules, itemKey: string): BinResul
   return (
     getBinForItem(rules, itemKey) ?? {
       display_name: formatItemName(itemKey),
-      bin: "check-local-guide" satisfies BinType,
+      bin: "consult-local-guide" satisfies BinType,
       description: CONSULT_GUIDE_NOTES,
       // The region's own waste-authority page is the best available "where do I look"
       // answer for an item its rules don't list.
