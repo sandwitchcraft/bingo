@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from "expo-sqlite";
 
 import { insertScanAt } from "@/lib/db";
 import { getBinForItem, getItemKeys, getRegionName } from "@/lib/regionData";
+import type { RegionRules } from "@/lib/regionSource";
 
 /**
  * Days before today for each seeded scan, oldest first. Fixed rather than random so
@@ -19,15 +20,18 @@ const DAYS_AGO = [60, 45, 38, 30, 25, 21, 18, 14, 12, 10, 8, 7, 5, 4, 3, 2, 1, 1
  * (see `listRecentScans`) — inserting them in any other order would put the seeded
  * dates out of order on screen and look like a formatting bug.
  */
-export async function seedScanHistory(db: SQLiteDatabase): Promise<number> {
-  const itemKeys = getItemKeys();
-  const region = getRegionName();
+export async function seedScanHistory(
+  db: SQLiteDatabase,
+  rules: RegionRules,
+): Promise<number> {
+  const itemKeys = getItemKeys(rules);
+  const region = getRegionName(rules);
   const now = new Date();
 
   let inserted = 0;
   for (const [index, daysAgo] of DAYS_AGO.entries()) {
     const itemKey = itemKeys[index % itemKeys.length];
-    const result = getBinForItem(itemKey);
+    const result = getBinForItem(rules, itemKey);
     if (!result) continue;
 
     // Time of day comes from the row's position *within its own day*, so rows

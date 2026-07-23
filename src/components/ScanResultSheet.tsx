@@ -14,7 +14,8 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BIN_LABEL, binColor, binSurface } from "@/lib/bins";
-import { formatItemName, resolveScanResult } from "@/lib/regionData";
+import { resolveScanResult } from "@/lib/regionData";
+import { useRegionRules } from "@/lib/regionStore";
 import { useScanResult } from "@/lib/scanResult";
 import { FONT, radii, useTheme } from "@/lib/theme";
 
@@ -25,6 +26,7 @@ const SHEET_EASING = Easing.bezier(0.32, 0.72, 0, 1);
 export function ScanResultSheet() {
   const { activeItemKey, dismiss } = useScanResult();
   const { theme } = useTheme();
+  const rules = useRegionRules();
   const router = useRouter();
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -113,10 +115,12 @@ export function ScanResultSheet() {
 
   if (!visible || !activeItemKey) return null;
 
-  const result = resolveScanResult(activeItemKey);
+  const result = resolveScanResult(rules, activeItemKey);
   const surface = binSurface(result.bin);
   const accent = binColor(result.bin);
-  const itemName = formatItemName(activeItemKey);
+  // The region's own copy-edited name; resolveScanResult formats the key for items
+  // the region doesn't list, so this is always populated.
+  const itemName = result.display_name;
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -148,7 +152,7 @@ export function ScanResultSheet() {
         >
           {/* Item header. With no pictogram, the item name itself carries the outcome
               color — `accent` is the bin's color, so a recycling item reads Harbor,
-              compost reads sprout, and so on. */}
+              organics reads sprout, and so on. */}
           <View style={styles.itemHeader}>
             <Text style={[styles.eyebrow, { color: theme.textMuted }]}>Identified item</Text>
             <Text style={[styles.itemName, { color: accent }]}>{itemName}</Text>
@@ -163,7 +167,7 @@ export function ScanResultSheet() {
           {/* Handling detail */}
           <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
             <Text style={[styles.eyebrow, { color: theme.textMuted }]}>Why</Text>
-            <Text style={[styles.body, { color: theme.textBody }]}>{result.notes}</Text>
+            <Text style={[styles.body, { color: theme.textBody }]}>{result.description}</Text>
           </View>
 
           {/* Consult-guide link */}

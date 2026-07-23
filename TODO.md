@@ -3,24 +3,52 @@
 Running punch list. Check things off as they land; add new items as they come up.
 
 ## Data
-- [ ] Create `assets/data/canada/ontario/ontario.json` — province-wide fallback (recycling rules
-      are standardized across Ontario as of 2026; Toronto stays a full standalone file since
-      garbage/compost still varies by city)
-- [ ] Wire up "most specific wins" region lookup (city → province → country) once more than one
-      region file exists — right now `regionData.ts` just imports `toronto.json` directly
+- [x] Rules now come from bingoDB (`https://sandwitchcraft.github.io/bingoDB/`) rather than a
+      bundled file — `regionSource.ts` fetches/validates/caches, `regionStore.tsx` holds the
+      active region, `assets/data/.../toronto/toronto.json` is an offline snapshot only
+- [x] `index.json` published at the bingoDB root — region discovery works end to end
+- [ ] Teach `csv_to_json.py` to regenerate `index.json` — it's hand-copied right now, so adding a
+      region to the DB silently leaves it undiscoverable. See `docs/bingoDB-index.json` for the
+      contract (flat leaf-files-only list, sorted by parents then display_name).
+- [ ] Add an Ontario province-wide file to bingoDB (recycling rules are standardized across
+      Ontario as of 2026; Toronto stays a full standalone file since garbage/organics still varies
+      by city)
+- [ ] Wire up "most specific wins" region lookup (city → province → country) once province-level
+      files exist — selection is currently one flat pick from the index, no fallback chain
 
 ## Scan flow
-- [ ] Replace the faked detected item (`getRandomItemKey()`, called from `(tabs)/index.tsx`) with
-      real on-device ML (TensorFlow Lite / Core ML transfer-learning model). Note this now writes
-      random items into scan history on every scan — Settings → Clear sort history flushes them.
+- [x] Real on-device ML replaced the faked detected item — vision-camera frame processor +
+      react-native-fast-tflite
+- [ ] Train/ship the real waste classifier. The bundled model is still COCO EfficientDet Lite0,
+      whose labels aren't item keys, so every live scan resolves to the check-local-guide
+      fallback and no region rule is ever exercised. Until then, Settings → **Sort a random
+      item** (dev-only) sorts a random key from the active region's rules — that's what
+      verifies the region data is wired. It writes a history row like any scan; Settings →
+      Clear sort history flushes them.
+- [ ] Drop `getRandomItemKey` and the "Sort a random item" row once the real model lands. It is
+      no longer dev-gated: on a release/TestFlight build it's the only way to see a real bin
+      result, since the COCO model can't produce item keys.
 - [ ] Wire the "Report incorrect sort" row in `ScanResultSheet` — currently a no-op placeholder
 
 ## Screens (currently stubs)
 - [ ] History screen: reads real data now (plain list of scans), but still needs the designed
       list rows + 3-bin stats grid per the UI spec. `useScanHistory` already returns the
       per-bin `counts` the grid needs.
-- [ ] Settings screen: location detection button, region picker modal, preference toggles,
-      support/about sections — only the Dark/Light theme toggle is wired up so far
+- [ ] Settings screen: preference toggles, support/about sections — theme, scan mode, region,
+      location detection and clear-history are wired so far. The screen scrolls now.
+
+- [ ] The rules refresh on launch goes through the platform HTTP cache, so a bingoDB
+      correction can be up to 10 minutes invisible (GitHub Pages sends `max-age=600`).
+      Settings → **Check for rule updates** bypasses it via a cache-busting query param;
+      decide whether the launch path should too, or whether 10 minutes is fine in production.
+
+## Errors / notifications
+- [x] In-app error banner — `ToastProvider` (`src/lib/toast.tsx`) + `ErrorToast`
+      (`src/components/ErrorToast.tsx`), mounted at the root. Red, drops in from the top,
+      auto-dismisses after 5s. Raise one with `useToast().showError(message)`.
+- [ ] Move the failures that currently go through `Alert.alert` (`dialogs.ts` → `notify`) onto
+      the toast where they're a report rather than a question: the clear-history and seed
+      failure notices both qualify. Confirmations stay dialogs.
 
 ## Storage
 - [x] SQLite scan history logging (`expo-sqlite`) — `src/lib/db.ts` owns the schema, a
@@ -29,12 +57,28 @@ Running punch list. Check things off as they land; add new items as they come up
 - [ ] `SQLiteProvider` has no `onError` handler, so a failed database open throws. Setting one
       would render the whole app null forever instead, so this needs a real error boundary +
       retry UI, not just a callback.
-- [ ] AsyncStorage settings/preferences (selected region, units, theme — theme currently resets
-      to dark on every app launch since it's just component state)
+- [x] AsyncStorage wrapper (`src/lib/storage.ts`) + persisted region selection and cached region
+      rules/index
+- [ ] Persist the rest through `storage.ts`: theme preference and scan mode both still reset on
+      every launch since they're just component state
 
 ## Location / region detection
-- [ ] Reverse geocoding (Nominatim) to resolve GPS lat/long → region name
-- [ ] Manual region picker fallback for offline/denied-permission cases
+- [x] Manual region picker — Settings → Region opens `src/app/region.tsx` (full-screen, search,
+      slide-in from the right), persists the choice, works offline off the cache
+- [x] Per-region downloads — cloud icon downloads without selecting, stop button appears only
+      if the transfer passes 1s, swipe-to-delete removes, `DOWNLOADED` section sorts first.
+      Selecting a downloaded region is now cache-only, so switching regions works offline.
+- [ ] `refreshDownloadedRules` walks downloaded regions sequentially. Fine at today's catalog
+      size; if downloads ever reach dozens, it needs throttling or a staleness check
+      (`last_updated`) so a refresh isn't N full fetches every time.
+- [x] Reverse geocoding (Nominatim) — Settings → Location → **Detect** reads the GPS fix,
+      reverse-geocodes it (`src/lib/location.ts`), matches the result against the catalog
+      most-specific-first, and selects it. The manual picker stays the fallback; every
+      failure mode surfaces as one sentence in the error toast.
+- [ ] `expo-location` was added to `app.json`'s plugins for its permission strings — this needs
+      a native rebuild (`scripts/ios-dev-build.sh`) before Detect will work on device.
+- [ ] Detection matches only the leaf name (city, then county, then state). Once province-level
+      files exist it should fall back down the chain rather than giving up at "no-match".
 
 ## Dev environment
 - [x] Expo Go doesn't support this project's SDK version, so local device testing needs a real

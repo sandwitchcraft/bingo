@@ -17,8 +17,9 @@
     "slate": { "hex": "#5B6B66", "role": "Secondary text, captions, metadata; also the consult-local-guide indicator" },
     "paper": { "hex": "#FAFAF8", "role": "Light mode background" },
     "line": { "hex": "#E7E5DE", "role": "Borders, dividers, hairlines" },
-    "compost": { "hex": "#218A5A", "role": "Compost/organics bin indicator — reuses sproutDeep" },
-    "consultLocalGuide": { "hex": "#5B6B66", "role": "Consult-local-guide indicator — reuses slate. Neutral by intent: a deferral, not a disposal outcome, so it must not share garbage's clay." }
+    "alert": { "hex": "#C4362B", "role": "Error notifications only — the toast banner's fill. Deliberately NOT a bin indicator and never an accent: clay is close in hue but reserved for garbage, so an error must not be able to read as a sorting outcome. Carries white text at 5.3:1." },
+    "organics": { "hex": "#218A5A", "role": "Organics bin indicator — reuses sproutDeep" },
+    "checkLocalGuide": { "hex": "#5B6B66", "role": "Check-local-guide indicator — reuses slate. Neutral by intent: a deferral, not a disposal outcome, so it must not share garbage's clay." }
   },
   "typography": {
     "display": { "family": "Manrope", "weight": 800, "usage": "Item names, large numerals, hero headings" },

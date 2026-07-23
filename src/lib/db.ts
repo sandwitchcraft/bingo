@@ -9,7 +9,7 @@ export const DATABASE_NAME = "bingo.db";
 // connection on every root re-render.
 export const DATABASE_OPTIONS: SQLiteOpenOptions = {};
 
-const LATEST_VERSION = 1;
+const LATEST_VERSION = 2;
 
 export async function migrateDbAsync(db: SQLiteDatabase): Promise<void> {
   // journal_mode can't change inside a transaction, so it runs first. It persists
@@ -32,6 +32,16 @@ export async function migrateDbAsync(db: SQLiteDatabase): Promise<void> {
         );
       `);
       version = 1;
+    }
+    if (version === 1) {
+      // The app adopted bingoDB's bin vocabulary. Rows written before that carry the old
+      // names, which are no longer BinType members — left alone they'd fall out of
+      // getBinCounts' `row.bin_result in counts` check and silently stop being counted.
+      await db.execAsync(`
+        UPDATE scan_history SET bin_result = 'organics' WHERE bin_result = 'compost';
+        UPDATE scan_history SET bin_result = 'check-local-guide' WHERE bin_result = 'consult_local_guide';
+      `);
+      version = 2;
     }
     // PRAGMA can't be parameterized. `version` is derived from this module's own
     // constants and never from input.
@@ -113,9 +123,9 @@ export async function getBinCounts(db: SQLiteDatabase): Promise<Record<BinType, 
 
   const counts: Record<BinType, number> = {
     recycling: 0,
-    compost: 0,
     garbage: 0,
-    consult_local_guide: 0,
+    organics: 0,
+    "check-local-guide": 0,
   };
   for (const row of rows) {
     if (row.bin_result in counts) counts[row.bin_result as BinType] = row.count;

@@ -1,12 +1,18 @@
 import { binColors } from "@/lib/brand";
 
-export type BinType = "recycling" | "compost" | "garbage" | "consult_local_guide";
+/**
+ * The bin vocabulary, defined by bingoDB — these are the exact `bin` strings the remote
+ * region files emit (see `regionSource.ts`), not names chosen here. Adding a bin means the
+ * database added one; anything unrecognized is coerced to "check-local-guide" on parse so
+ * the UI never has to render a bin it has no color or label for.
+ */
+export type BinType = "recycling" | "garbage" | "organics" | "check-local-guide";
 
 export const BIN_LABEL: Record<BinType, string> = {
   recycling: "Recycling",
-  compost: "Compost",
   garbage: "Garbage",
-  consult_local_guide: "Consult Local Guide",
+  organics: "Organics",
+  "check-local-guide": "Consult Local Guide",
 };
 
 /**

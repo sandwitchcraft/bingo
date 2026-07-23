@@ -12,10 +12,13 @@ import { useMemo, useState } from "react";
 import { useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
+import { ErrorToast } from "@/components/ErrorToast";
 import { ScanResultSheet } from "@/components/ScanResultSheet";
 import { DATABASE_NAME, DATABASE_OPTIONS, migrateDbAsync } from "@/lib/db";
+import { RegionProvider } from "@/lib/regionStore";
 import { ScanResultProvider } from "@/lib/scanResult";
 import { ScanSettingsProvider } from "@/lib/scanSettings";
+import { ToastProvider } from "@/lib/toast";
 import { resolveTheme, THEMES, ThemeContext, type ThemePreference } from "@/lib/theme";
 
 export default function RootLayout() {
@@ -69,12 +72,25 @@ export default function RootLayout() {
           onInit={migrateDbAsync}
         >
           <ScanSettingsProvider>
-            <ScanResultProvider>
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="(tabs)" />
-              </Stack>
-              <ScanResultSheet />
-            </ScanResultProvider>
+            {/* Outermost of the app's own providers: anything below it, on any screen, can
+                raise an error banner. */}
+            <ToastProvider>
+              {/* Above ScanResultProvider: recording a scan reads the active region's rules
+                  for the bin outcome and the region name it stores. */}
+              <RegionProvider>
+                <ScanResultProvider>
+                  <Stack screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="(tabs)" />
+                    {/* Not a tab — pushed from Settings, and the native stack's
+                        slide-from-right is what gives it its reveal (and back-swipe). */}
+                    <Stack.Screen name="region" options={{ animation: "slide_from_right" }} />
+                  </Stack>
+                  <ScanResultSheet />
+                  {/* Last, so the banner floats above the result sheet as well as the tabs. */}
+                  <ErrorToast />
+                </ScanResultProvider>
+              </RegionProvider>
+            </ToastProvider>
           </ScanSettingsProvider>
         </SQLiteProvider>
       </ThemeContext.Provider>

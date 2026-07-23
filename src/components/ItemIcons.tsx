@@ -206,7 +206,7 @@ export function BinGlyph({ bin, size = 24 }: { bin: BinType; size?: number }) {
     );
   }
 
-  if (bin === "compost") {
+  if (bin === "organics") {
     return (
       <Glyph size={size} color={color}>
         <Path d="M12 20.5v-7" />
@@ -227,7 +227,7 @@ export function BinGlyph({ bin, size = 24 }: { bin: BinType; size?: number }) {
     );
   }
 
-  // consult_local_guide
+  // check-local-guide
   return (
     <Glyph size={size} color={color}>
       <Path d="M12 21.2a9.2 9.2 0 1 0 0-18.4 9.2 9.2 0 0 0 0 18.4z" />

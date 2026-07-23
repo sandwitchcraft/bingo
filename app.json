@@ -24,6 +24,12 @@
         }
       ],
       "expo-sqlite",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Bin-go uses your location once, when you tap Detect, to work out which municipality's sorting rules apply. Your coordinates aren't stored."
+        }
+      ],
       "react-native-fast-tflite"
     ],
     "experiments": {
@@ -31,7 +37,7 @@
       "reactCompiler": true
     },
     "ios": {
-      "bundleIdentifier": "com.anonymous.Bingo",
+      "bundleIdentifier": "com.sandwichcraft.Bingo",
       "infoPlist": {
         "NSCameraUsageDescription": "Bin-go uses the camera to identify the item you're scanning and show which bin it goes in. Nothing leaves your device."
       }

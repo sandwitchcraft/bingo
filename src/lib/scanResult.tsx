@@ -3,6 +3,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 
 import { insertScan } from "@/lib/db";
 import { getRegionName, resolveScanResult } from "@/lib/regionData";
+import { useRegionRules } from "@/lib/regionStore";
 
 type ScanResultContextValue = {
   activeItemKey: string | null;
@@ -14,6 +15,7 @@ const ScanResultContext = createContext<ScanResultContextValue | null>(null);
 
 export function ScanResultProvider({ children }: { children: ReactNode }) {
   const db = useSQLiteContext();
+  const rules = useRegionRules();
   const [activeItemKey, setActiveItemKey] = useState<string | null>(null);
 
   const value = useMemo<ScanResultContextValue>(
@@ -27,11 +29,11 @@ export function ScanResultProvider({ children }: { children: ReactNode }) {
 
         // resolveScanResult always returns a result (real rule, or the consult-local-guide
         // fallback for a recognized-but-unlisted object), so every scan logs a row.
-        const result = resolveScanResult(itemKey);
+        const result = resolveScanResult(rules, itemKey);
 
         // Fire-and-forget: a failed write must never block or interrupt showing the
         // result. The catch isn't optional — an unhandled rejection redboxes in dev.
-        insertScan(db, { itemKey, bin: result.bin, region: getRegionName() }).catch(
+        insertScan(db, { itemKey, bin: result.bin, region: getRegionName(rules) }).catch(
           (error) => {
             console.warn("[history] failed to record scan", error);
           },
@@ -39,7 +41,7 @@ export function ScanResultProvider({ children }: { children: ReactNode }) {
       },
       dismiss: () => setActiveItemKey(null),
     }),
-    [activeItemKey, db],
+    [activeItemKey, db, rules],
   );
 
   return <ScanResultContext.Provider value={value}>{children}</ScanResultContext.Provider>;

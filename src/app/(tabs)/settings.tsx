@@ -1,13 +1,21 @@
+import { useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Wordmark } from "@/components/Wordmark";
 import { clearScanHistory } from "@/lib/db";
 import { seedScanHistory } from "@/lib/devSeed";
 import { confirmDestructive, notify } from "@/lib/dialogs";
+import { detectRegion, locationErrorMessage } from "@/lib/location";
+import { getRandomItemKey, getRegionName } from "@/lib/regionData";
+import { regionSubtitle } from "@/lib/regionSource";
+import { useRegion } from "@/lib/regionStore";
+import { useScanResult } from "@/lib/scanResult";
 import { useScanSettings, type ScanMode } from "@/lib/scanSettings";
 import { accent, FONT, radii, useTheme, type ThemePreference } from "@/lib/theme";
+import { useToast } from "@/lib/toast";
 
 // Light first: it's the brand's primary mode.
 const MODES: { name: ThemePreference; label: string }[] = [
@@ -24,7 +32,26 @@ const SCAN_MODES: { name: ScanMode; label: string }[] = [
 export default function SettingsScreen() {
   const { theme, name, preference, setPreference } = useTheme();
   const { scanMode, setScanMode } = useScanSettings();
+  const { rules, selectedId, catalog, selectRegion, refreshDownloadedRules } = useRegion();
+  const { showResult } = useScanResult();
+  const { showError } = useToast();
+  const router = useRouter();
   const db = useSQLiteContext();
+
+  const [detecting, setDetecting] = useState(false);
+  // Success confirmation for detection, shown inline. The toast is error-only on purpose:
+  // a banner that also carries good news trains people to dismiss it unread.
+  const [detected, setDetected] = useState<string | null>(null);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshed, setRefreshed] = useState<string | null>(null);
+
+  // Falls back to the rules' own location_path when the catalog hasn't loaded the
+  // matching entry yet — the rules are always present, the index isn't.
+  const selected = catalog.find((entry) => entry.id === selectedId);
+  const regionParents = selected
+    ? regionSubtitle(selected)
+    : rules.location_path.slice(0, -1).reverse().join(", ");
 
   const confirmClearHistory = () => {
     confirmDestructive({
@@ -40,8 +67,84 @@ export default function SettingsScreen() {
     });
   };
 
+  const sortRandomItem = () => {
+    const itemKey = getRandomItemKey(rules);
+    if (!itemKey) {
+      notify("No items", "The active region's rules are empty.");
+      return;
+    }
+    // Goes through showResult, so it logs a history row like a real scan does — that's
+    // deliberate, it's also how you check the region name being written is the right one.
+    showResult(itemKey);
+  };
+
+  /**
+   * GPS → Nominatim → a region in the catalog. A button rather than something that runs on
+   * launch: it costs a permission prompt and a request to a courtesy-rate-limited service,
+   * and the manual picker below already covers the case where it fails.
+   */
+  const detectFromLocation = () => {
+    if (detecting) return;
+    setDetecting(true);
+    setDetected(null);
+
+    const run = async () => {
+      let match;
+      try {
+        match = await detectRegion(catalog);
+      } catch (error) {
+        console.warn("[location] region detection failed", error);
+        showError(locationErrorMessage(error));
+        return;
+      }
+      // Already on it — nothing to fetch, but still confirm, or the button looks inert.
+      if (match.id !== selectedId) {
+        try {
+          await selectRegion(match);
+        } catch (error) {
+          // Separate message from the block above: the location half worked, so telling
+          // the user to check their location settings would send them the wrong way.
+          console.warn("[location] failed to load the detected region", error);
+          showError(`Found ${match.displayName}, but its rules wouldn't download. Check your connection.`);
+          return;
+        }
+      }
+      setDetected(`Region set to ${match.displayName}.`);
+    };
+
+    run().finally(() => setDetecting(false));
+  };
+
+  /**
+   * Pulls every downloaded region's rules from bingoDB, past both caches. Reports the active
+   * region's version and date rather than a bare "done": the rules are data the user can't
+   * see, so "updated" with nothing to compare against is indistinguishable from a no-op.
+   */
+  const refreshFromDatabase = () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshed(null);
+    refreshDownloadedRules()
+      .then(({ refreshed: count, failed, active }) => {
+        const stamp = [active.version && `v${active.version}`, active.last_updated]
+          .filter(Boolean)
+          .join(" · ");
+        const scope = count === 1 ? "1 region" : `${count} regions`;
+        setRefreshed(
+          `${scope} up to date${stamp ? ` — ${getRegionName(rules)} ${stamp}` : ""}.` +
+            // Named, not counted: "1 failed" leaves the user guessing which one is stale.
+            (failed.length > 0 ? ` Couldn't update ${failed.join(", ")}.` : ""),
+        );
+      })
+      .catch((error: unknown) => {
+        console.warn("[region] manual rules refresh failed", error);
+        showError("Couldn't reach the rules database. Check your connection and try again.");
+      })
+      .finally(() => setRefreshing(false));
+  };
+
   const runSeed = () => {
-    seedScanHistory(db)
+    seedScanHistory(db, rules)
       .then((count) => notify("History seeded", `Added ${count} backdated scans.`))
       .catch((error: unknown) => {
         console.warn("[history] failed to seed history", error);
@@ -56,8 +159,113 @@ export default function SettingsScreen() {
         <Text style={[styles.heading, { color: theme.text }]}>Settings</Text>
       </View>
 
-      <View style={styles.body}>
-        <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Appearance</Text>
+      {/* Scrolls: the section list is already taller than a small phone with the keyboard
+          out of the picture, and every row added below pushes it further. */}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.body}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Location</Text>
+        {/* Page-wide: the whole card is the tap target, unlike the outlined action
+            buttons below, because pressing it navigates rather than acting in place. */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.card,
+            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            pressed && { backgroundColor: theme.bgInput },
+          ]}
+          onPress={() => router.push("/region")}
+          accessibilityRole="button"
+          accessibilityLabel={`Region, currently ${getRegionName(rules)}`}
+        >
+          <Text style={[styles.rowLabel, { color: theme.textBody }]}>Region</Text>
+          <View style={styles.rowValue}>
+            <View style={styles.rowValueText}>
+              <Text style={[styles.rowValueName, { color: theme.text }]} numberOfLines={1}>
+                {getRegionName(rules)}
+              </Text>
+              {regionParents !== "" && (
+                <Text style={[styles.rowValueSub, { color: theme.textMuted }]} numberOfLines={1}>
+                  {regionParents}
+                </Text>
+              )}
+            </View>
+            <Text style={[styles.chevron, { color: theme.textSubtle }]}>›</Text>
+          </View>
+        </Pressable>
+
+        <View
+          style={[
+            styles.card,
+            styles.stackedRow,
+            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+          ]}
+        >
+          <Text style={[styles.rowLabel, { color: theme.textBody }]}>Detect from location</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionButton,
+              { borderColor: theme.cardBorder },
+              pressed && { backgroundColor: theme.bgInput },
+              detecting && styles.actionButtonBusy,
+            ]}
+            onPress={detectFromLocation}
+            disabled={detecting}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityState={{ busy: detecting }}
+          >
+            {detecting ? (
+              <ActivityIndicator size="small" color={accent[name]} />
+            ) : (
+              <Text style={[styles.rowAction, { color: theme.textMuted }]}>Detect</Text>
+            )}
+          </Pressable>
+        </View>
+        {detected != null && (
+          <Text style={[styles.rowHint, { color: theme.textMuted }, styles.detectedNote]}>
+            {detected}
+          </Text>
+        )}
+
+        <View
+          style={[
+            styles.card,
+            styles.stackedRow,
+            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+          ]}
+        >
+          <Text style={[styles.rowLabel, { color: theme.textBody }]}>Check for rule updates</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionButton,
+              { borderColor: theme.cardBorder },
+              pressed && { backgroundColor: theme.bgInput },
+              refreshing && styles.actionButtonBusy,
+            ]}
+            onPress={refreshFromDatabase}
+            disabled={refreshing}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityState={{ busy: refreshing }}
+          >
+            {refreshing ? (
+              <ActivityIndicator size="small" color={accent[name]} />
+            ) : (
+              <Text style={[styles.rowAction, { color: theme.textMuted }]}>Refresh</Text>
+            )}
+          </Pressable>
+        </View>
+        {refreshed != null && (
+          <Text style={[styles.rowHint, { color: theme.textMuted }, styles.detectedNote]}>
+            {refreshed}
+          </Text>
+        )}
+
+        <Text style={[styles.sectionLabel, { color: theme.textMuted }, styles.sectionSpacer]}>
+          Appearance
+        </Text>
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
           <Text style={[styles.rowLabel, { color: theme.textBody }]}>Mode</Text>
           <View style={[styles.segment, { backgroundColor: theme.bgInput }]}>
@@ -162,7 +370,7 @@ export default function SettingsScreen() {
           <View
             style={[
               styles.card,
-              styles.devRow,
+              styles.stackedRow,
               { backgroundColor: theme.card, borderColor: theme.cardBorder },
             ]}
           >
@@ -181,10 +389,42 @@ export default function SettingsScreen() {
           </View>
         )}
 
-        <Text style={[styles.note, { color: theme.textMuted }]}>
-          Region, preferences, and support settings are not yet available.
+        {/* Ships in release builds, unlike the seeder above. Sorts a random item from the
+            *active* region's rules — the check that the app is reading the region you
+            picked. The camera can't do that job while the bundled model is COCO: it names
+            objects no region lists, so every real scan lands on the check-local-guide
+            fallback and never exercises a rule. It's the only way a tester on a TestFlight
+            build can see a real bin result, which is why it isn't dev-gated. Retire it with
+            `getRandomItemKey` once the trained classifier lands. */}
+        <View
+          style={[
+            styles.card,
+            styles.stackedRow,
+            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+          ]}
+        >
+          <Text style={[styles.rowLabel, { color: theme.textBody }]}>Sort a random item</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionButton,
+              { borderColor: theme.cardBorder },
+              pressed && { backgroundColor: theme.bgInput },
+            ]}
+            onPress={sortRandomItem}
+            hitSlop={8}
+          >
+            <Text style={[styles.rowAction, { color: theme.textMuted }]}>Sort</Text>
+          </Pressable>
+        </View>
+        <Text style={[styles.rowHint, { color: theme.textMuted }, styles.detectedNote]}>
+          Shows a real result from this region&apos;s rules, and logs it to history — the
+          camera can&apos;t yet, since the bundled model doesn&apos;t know item names.
         </Text>
-      </View>
+
+        <Text style={[styles.note, { color: theme.textMuted }]}>
+          Preferences and support settings are not yet available.
+        </Text>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -193,7 +433,10 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 12 },
   heading: { fontFamily: FONT.heading, fontSize: 26, letterSpacing: -0.4, marginTop: 4 },
-  body: { paddingHorizontal: 24, paddingTop: 8 },
+  scroll: { flex: 1 },
+  // Bottom padding clears the tab bar — the last row would otherwise sit under it with
+  // nothing left to scroll.
+  body: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 48 },
   sectionLabel: {
     fontFamily: FONT.utility,
     fontSize: 10,
@@ -211,8 +454,17 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   sectionSpacer: { marginTop: 28 },
-  devRow: { marginTop: 10 },
+  /** A second (or third) card inside one section, under the first. */
+  stackedRow: { marginTop: 10 },
+  /** An explanatory or confirmation line sitting under the card it belongs to. */
+  detectedNote: { marginTop: 8, paddingHorizontal: 4 },
   rowLabel: { fontFamily: FONT.body, fontSize: 14 },
+  // The value side of a navigation row: name over its parent path, then the chevron.
+  rowValue: { flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 1 },
+  rowValueText: { alignItems: "flex-end", flexShrink: 1 },
+  rowValueName: { fontFamily: FONT.bodyEmphasis, fontSize: 14 },
+  rowValueSub: { fontFamily: FONT.utility, fontSize: 10, letterSpacing: 0.4, marginTop: 2 },
+  chevron: { fontFamily: FONT.body, fontSize: 20, lineHeight: 22 },
   rowAction: {
     fontFamily: FONT.utilityStrong,
     fontSize: 11,
@@ -226,6 +478,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
+  // Holds the button's footprint while the spinner replaces the label, so the row doesn't
+  // twitch when detection starts.
+  actionButtonBusy: { minWidth: 62, alignItems: "center", paddingVertical: 5 },
   // Vertical card: a full-width control stacked above its explanatory hint.
   stackCard: {
     borderRadius: radii.card,

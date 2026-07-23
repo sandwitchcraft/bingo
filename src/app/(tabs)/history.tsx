@@ -4,7 +4,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Wordmark } from "@/components/Wordmark";
 import { BIN_LABEL, binColor } from "@/lib/bins";
 import { parseScannedAt, type ScanHistoryRow } from "@/lib/db";
-import { formatItemName } from "@/lib/regionData";
+import { getItemDisplayName } from "@/lib/regionData";
+import { useRegionRules } from "@/lib/regionStore";
 import { FONT, radii, useTheme } from "@/lib/theme";
 import { useScanHistory } from "@/lib/useScanHistory";
 
@@ -19,13 +20,15 @@ function formatScannedAt(scannedAt: string): string {
 
 function ScanRow({ scan }: { scan: ScanHistoryRow }) {
   const { theme } = useTheme();
+  const rules = useRegionRules();
   const accent = binColor(scan.bin_result);
 
   return (
     <View style={[styles.row, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
       <View style={styles.rowMain}>
         <Text style={[styles.itemName, { color: theme.text }]}>
-          {formatItemName(scan.item_name)}
+          {/* Rows scanned under a different region fall back to the formatted key. */}
+          {getItemDisplayName(rules, scan.item_name)}
         </Text>
         <Text style={[styles.binLabel, { color: accent }]}>{BIN_LABEL[scan.bin_result]}</Text>
       </View>
