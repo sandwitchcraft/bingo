@@ -1,5 +1,5 @@
-import type { BinType } from "@/lib/bins";
-import type { RegionItem, RegionRules } from "@/lib/regionSource";
+import type { BinType } from "@/core/bins";
+import type { RegionItem, RegionRules } from "@/features/region/regionSource";
 
 /**
  * Lookups over one region's rules. Every function takes the rules explicitly rather than

@@ -1,3 +1,20 @@
+/**
+ * Scan tab — the camera screen, and the only place inference actually runs.
+ *
+ * A Vision Camera `useFrameOutput` worklet runs the TFLite model on the frame thread every
+ * Nth frame (~3x/sec) and reports the best detection back to JS. In `continuous` mode a
+ * confident detection commits itself; in `tap` mode the current live detection is committed
+ * when the user taps. Either way "committing" means handing an item key to `showResult`,
+ * which writes the history row and raises the result sheet.
+ *
+ * The knobs (thresholds, frame interval, label→key mapping, output-tensor layout) all live
+ * in `@/features/scan/classifier` — this file is the camera, the worklet plumbing, and the
+ * viewfinder chrome only.
+ *
+ * Native-only: there is no web frame-processor, so the screen renders a notice under
+ * `Platform.OS === "web"`. Its chrome is fixed dark regardless of app theme, since it sits
+ * over the camera feed.
+ */
 import { useIsFocused } from "expo-router";
 import { useTensorflowModel } from "react-native-fast-tflite";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -14,7 +31,7 @@ import {
 } from "react-native-vision-camera";
 import { scheduleOnRN } from "react-native-worklets";
 
-import { Wordmark } from "@/components/Wordmark";
+import { formatItemName } from "@/features/region/regionData";
 import {
   AUTO_SCAN_THRESHOLD,
   COCO_LABELS,
@@ -25,13 +42,13 @@ import {
   labelToItemKey,
   resolveOutputLayout,
   type Detection,
-} from "@/lib/classifier";
-import { formatItemName } from "@/lib/regionData";
-import { useScanResult } from "@/lib/scanResult";
-import { useScanSettings } from "@/lib/scanSettings";
-import { colors, FONT, radii } from "@/lib/theme";
+} from "@/features/scan/classifier";
+import { useScanResult } from "@/features/scan/scanResult";
+import { useScanSettings } from "@/features/scan/scanSettings";
+import { Wordmark } from "@/ui/Wordmark";
+import { colors, FONT, radii } from "@/ui/theme";
 
-// The bundled base model (EfficientDet Lite0) — see src/lib/classifier.ts for why this is
+// The bundled base model (EfficientDet Lite0) — see src/features/scan/classifier.ts for why this is
 // a COCO detector standing in for the not-yet-trained waste model. require() hands Metro a
 // bundled-asset handle; `tflite` is registered as an asset extension in metro.config.js.
 const MODEL_SOURCE = require("@/assets/models/model.tflite");

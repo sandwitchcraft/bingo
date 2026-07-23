@@ -1,3 +1,14 @@
+/**
+ * The scan result: a draggable bottom sheet that rises when `scanResult.tsx` has an active
+ * item, showing the item, its bin, and any handling notes from the region rules.
+ *
+ * Mounted once in the root layout (not per-screen), so it can be raised from anywhere —
+ * the Scan tab commits a detection, Settings' dev "sort a random item" does too.
+ *
+ * Two snap positions, collapsed and expanded, driven by a Reanimated shared value with a
+ * `COLLAPSED_HEIGHT` / `SNAP_THRESHOLD` pair below. Note the visibility-only effect further
+ * down: its dep array is hand-maintained, since this project has no `exhaustive-deps` lint.
+ */
 import * as WebBrowser from "expo-web-browser";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -13,11 +24,11 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BIN_LABEL, binColor, binSurface } from "@/lib/bins";
-import { resolveScanResult } from "@/lib/regionData";
-import { useRegionRules } from "@/lib/regionStore";
-import { useScanResult } from "@/lib/scanResult";
-import { FONT, radii, useTheme } from "@/lib/theme";
+import { BIN_LABEL, binColor, binSurface } from "@/core/bins";
+import { resolveScanResult } from "@/features/region/regionData";
+import { useRegionRules } from "@/features/region/regionStore";
+import { useScanResult } from "@/features/scan/scanResult";
+import { FONT, radii, useTheme } from "@/ui/theme";
 
 const COLLAPSED_HEIGHT = 320; // visible content height when collapsed
 const SNAP_THRESHOLD = 60; // drag travel to switch snap state

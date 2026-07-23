@@ -1,9 +1,9 @@
 import { useSQLiteContext } from "expo-sqlite";
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
-import { insertScan } from "@/lib/db";
-import { getRegionName, resolveScanResult } from "@/lib/regionData";
-import { useRegionRules } from "@/lib/regionStore";
+import { insertScan } from "@/features/history/db";
+import { getRegionName, resolveScanResult } from "@/features/region/regionData";
+import { useRegionRules } from "@/features/region/regionStore";
 
 type ScanResultContextValue = {
   activeItemKey: string | null;

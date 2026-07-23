@@ -1,3 +1,8 @@
+/**
+ * The three bottom-nav glyphs — `ScanIcon`, `HistoryIcon`, `SettingsIcon` — used only by
+ * `src/app/(tabs)/_layout.tsx`. Same pictogram spec as `ItemIcons.tsx` and `RegionIcons.tsx`:
+ * 24px grid, single-weight stroke, round caps, no fill.
+ */
 import Svg, { Circle, Path, Polyline } from "react-native-svg";
 
 type IconProps = { size: number; color: string };

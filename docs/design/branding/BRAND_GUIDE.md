@@ -7,11 +7,11 @@ Read this before implementing any UI. Two companion files sit alongside this one
 
 Never hardcode a hex value or font name in a component.
 
-**How this maps into the app.** `docs/branding/theme.ts` is mirrored at `src/lib/brand.ts`,
+**How this maps into the app.** `docs/design/branding/theme.ts` is mirrored at `src/ui/brand.ts`,
 which is the copy the app actually imports — the two must be kept identical, and the mirror
-is the thing most likely to rot, so change both together. `src/lib/theme.ts` layers the
+is the thing most likely to rot, so change both together. `src/ui/theme.ts` layers the
 semantic light/dark themes on top of those raw tokens and re-exports everything, so
-components import only from `@/lib/theme` and never reach for `brand.ts` directly.
+components import only from `@/ui/theme` and never reach for `brand.ts` directly.
 
 Values that this guide fixes (the brand tokens) live in `brand.ts`. Values the brand leaves
 open — the lifted/recessed dark surfaces, hairlines, muted text — are *derived* in

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { getString, setString, StorageKeys } from "@/core/storage";
 import {
   BASE_URL,
   BUNDLED_CATALOG,
@@ -16,8 +17,7 @@ import {
   writeCachedRules,
   type RegionRules,
   type RegionSummary,
-} from "@/lib/regionSource";
-import { getString, setString, StorageKeys } from "@/lib/storage";
+} from "@/features/region/regionSource";
 
 /**
  * The selected region and its rules.

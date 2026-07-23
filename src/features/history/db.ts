@@ -1,6 +1,20 @@
+/**
+ * Scan history storage: the SQLite schema, its migrations, and every query run against it.
+ * React-free — `SQLiteProvider` is mounted in `src/app/_layout.tsx` and `useScanHistory.ts`
+ * is the hook that reads through this.
+ *
+ * Two schema facts worth knowing before using anything here:
+ * - `item_name` stores the raw item **key** (`"plastic_bottle"`), not a display name, so it
+ *   stays a valid join key back into the region rules. Render it via `formatItemName`.
+ * - `scanned_at` is UTC at one-second resolution — too coarse to order by, so list queries
+ *   order by `id` (AUTOINCREMENT, append-only) instead. Parse it with `parseScannedAt`.
+ *
+ * `migrateDbAsync` is versioned through `PRAGMA user_version`; version 2 is what rewrote
+ * the pre-bingoDB bin names on existing rows.
+ */
 import type { SQLiteDatabase, SQLiteOpenOptions } from "expo-sqlite";
 
-import type { BinType } from "@/lib/bins";
+import type { BinType } from "@/core/bins";
 
 export const DATABASE_NAME = "bingo.db";
 

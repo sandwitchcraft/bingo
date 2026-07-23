@@ -1,7 +1,7 @@
 import * as Location from "expo-location";
 
-import { fetchJSON } from "@/lib/net";
-import type { RegionSummary } from "@/lib/regionSource";
+import { fetchJSON } from "@/core/net";
+import type { RegionSummary } from "@/features/region/regionSource";
 
 /**
  * GPS → region. React-free, same as `regionSource.ts`.

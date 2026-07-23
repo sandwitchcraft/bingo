@@ -1,3 +1,12 @@
+/**
+ * Renders the error banner whose state lives in `toast.tsx`. Mounted once, last in the root
+ * layout, so it floats above the tab bar and the result sheet alike.
+ *
+ * Red, warning triangle, drops in from the top, auto-dismisses after `VISIBLE_MS`, tap to
+ * dismiss early. Top rather than bottom because the bottom of the screen belongs to the tab
+ * bar and the result sheet's travel path. Errors only — success is confirmed inline by
+ * whatever screen produced it.
+ */
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import Animated, {
@@ -10,8 +19,8 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 
-import { colors, FONT, radii } from "@/lib/theme";
-import { useToast, type Toast } from "@/lib/toast";
+import { colors, FONT, radii } from "@/ui/theme";
+import { useToast, type Toast } from "@/ui/toast";
 
 const VISIBLE_MS = 5_000;
 const TOAST_EASING = Easing.bezier(0.32, 0.72, 0, 1);

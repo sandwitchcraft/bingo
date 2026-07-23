@@ -1,9 +1,16 @@
+/**
+ * The three-tab shell: History, Scan, Settings.
+ *
+ * The tab bar is hand-rendered rather than configured, because the spec's center Scan tab
+ * (larger icon, center position) isn't something the default bar expresses. `TAB_ORDER`
+ * below is the single place the order, labels and icons are declared.
+ */
 import { Tabs, type BottomTabBarProps } from "expo-router/js-tabs";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { HistoryIcon, ScanIcon, SettingsIcon } from "@/components/TabIcons";
-import { accent, FONT, useTheme } from "@/lib/theme";
+import { HistoryIcon, ScanIcon, SettingsIcon } from "@/ui/TabIcons";
+import { accent, FONT, useTheme } from "@/ui/theme";
 
 type TabDef = {
   name: string;

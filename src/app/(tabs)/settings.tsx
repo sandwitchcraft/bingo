@@ -1,21 +1,33 @@
+/**
+ * Settings tab. A scrolling list of preference rows, each one wired to the provider that
+ * owns the state — this screen holds no preferences of its own.
+ *
+ * What it offers: theme mode, scan mode, the active region (pushes the full-screen picker
+ * in `src/app/region.tsx`), **Detect** location, **Check for rule updates**, clear history,
+ * and the dev-only seed/random-sort helpers.
+ *
+ * Feedback here is deliberately split. Failures with nowhere else to land go to the error
+ * toast; successes confirm **inline** (the `detected` / `refreshed` state below) rather than
+ * as a banner, because a banner that also carries good news gets dismissed unread.
+ */
 import { useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Wordmark } from "@/components/Wordmark";
-import { clearScanHistory } from "@/lib/db";
-import { seedScanHistory } from "@/lib/devSeed";
-import { confirmDestructive, notify } from "@/lib/dialogs";
-import { detectRegion, locationErrorMessage } from "@/lib/location";
-import { getRandomItemKey, getRegionName } from "@/lib/regionData";
-import { regionSubtitle } from "@/lib/regionSource";
-import { useRegion } from "@/lib/regionStore";
-import { useScanResult } from "@/lib/scanResult";
-import { useScanSettings, type ScanMode } from "@/lib/scanSettings";
-import { accent, FONT, radii, useTheme, type ThemePreference } from "@/lib/theme";
-import { useToast } from "@/lib/toast";
+import { clearScanHistory } from "@/features/history/db";
+import { seedScanHistory } from "@/features/history/devSeed";
+import { detectRegion, locationErrorMessage } from "@/features/region/location";
+import { getRandomItemKey, getRegionName } from "@/features/region/regionData";
+import { regionSubtitle } from "@/features/region/regionSource";
+import { useRegion } from "@/features/region/regionStore";
+import { useScanResult } from "@/features/scan/scanResult";
+import { useScanSettings, type ScanMode } from "@/features/scan/scanSettings";
+import { Wordmark } from "@/ui/Wordmark";
+import { confirmDestructive, notify } from "@/ui/dialogs";
+import { accent, FONT, radii, useTheme, type ThemePreference } from "@/ui/theme";
+import { useToast } from "@/ui/toast";
 
 // Light first: it's the brand's primary mode.
 const MODES: { name: ThemePreference; label: string }[] = [

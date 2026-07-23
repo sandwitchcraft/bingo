@@ -1,10 +1,10 @@
 import { createContext, useContext } from "react";
 import type { ColorSchemeName } from "react-native";
 
-import { binColors, colors, fonts, logo, radii, spacing } from "@/lib/brand";
+import { binColors, colors, fonts, logo, radii, spacing } from "@/ui/brand";
 
 // Brand tokens are re-exported here so components have a single import site for
-// anything visual (`@/lib/theme`). brand.ts mirrors docs/branding/theme.ts and is
+// anything visual (`@/ui/theme`). brand.ts mirrors docs/design/branding/theme.ts and is
 // the source of truth for raw token values — change tokens there, not here.
 export { binColors, colors, fonts, logo, radii, spacing };
 

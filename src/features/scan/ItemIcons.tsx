@@ -1,8 +1,16 @@
+/**
+ * Item artwork for the scan result sheet: one glyph per item category, plus the tinted
+ * bin-coloured badge they sit in.
+ *
+ * Icons are looked up by item key with a generic fallback, so an item the region rules name
+ * but this file has no drawing for still renders. Same pictogram spec as `TabIcons.tsx` and
+ * `RegionIcons.tsx` — 24px grid, single-weight stroke, round caps, no fill.
+ */
 import { View } from "react-native";
 import Svg, { Path, Rect } from "react-native-svg";
 
-import { binColor, binTint, type BinType } from "@/lib/bins";
-import { radii } from "@/lib/theme";
+import { binColor, binTint, type BinType } from "@/core/bins";
+import { radii } from "@/ui/theme";
 
 type IconProps = { size: number; color: string };
 

@@ -20,11 +20,11 @@ import {
   CloudDownloadIcon,
   ExternalLinkIcon,
   StopCircleIcon,
-} from "@/components/RegionIcons";
-import { BUNDLED_REGION_ID, regionSubtitle, type RegionSummary } from "@/lib/regionSource";
-import { useRegion } from "@/lib/regionStore";
-import { accent, colors, FONT, radii, useTheme } from "@/lib/theme";
-import { useToast } from "@/lib/toast";
+} from "@/features/region/RegionIcons";
+import { BUNDLED_REGION_ID, regionSubtitle, type RegionSummary } from "@/features/region/regionSource";
+import { useRegion } from "@/features/region/regionStore";
+import { accent, colors, FONT, radii, useTheme } from "@/ui/theme";
+import { useToast } from "@/ui/toast";
 
 /**
  * Full-screen region picker, pushed from Settings. The slide-in reveal is the native

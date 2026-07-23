@@ -2,8 +2,8 @@ import { useFocusEffect } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useCallback, useState } from "react";
 
-import type { BinType } from "@/lib/bins";
-import { getBinCounts, listRecentScans, type ScanHistoryRow } from "@/lib/db";
+import type { BinType } from "@/core/bins";
+import { getBinCounts, listRecentScans, type ScanHistoryRow } from "@/features/history/db";
 
 type ScanHistoryData = {
   scans: ScanHistoryRow[];

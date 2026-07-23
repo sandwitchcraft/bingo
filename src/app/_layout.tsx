@@ -1,3 +1,15 @@
+/**
+ * Root route. Everything the app renders is inside this tree.
+ *
+ * Its whole job is composition: load the brand fonts, hold the theme preference, mount the
+ * provider stack (SQLite → scan settings → toast → region → scan result), and declare the
+ * two top-level routes — the `(tabs)` group and the pushed `region` picker. The two pieces
+ * of always-on UI that must float above every screen, `ScanResultSheet` and `ErrorToast`,
+ * are mounted here rather than per-screen.
+ *
+ * Provider nesting order is load-bearing and each rung is commented inline below; the
+ * SQLiteProvider memo note in particular is the reason theme state lives above it.
+ */
 import {
   IBMPlexMono_500Medium,
   IBMPlexMono_600SemiBold,
@@ -12,14 +24,14 @@ import { useMemo, useState } from "react";
 import { useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import { ErrorToast } from "@/components/ErrorToast";
-import { ScanResultSheet } from "@/components/ScanResultSheet";
-import { DATABASE_NAME, DATABASE_OPTIONS, migrateDbAsync } from "@/lib/db";
-import { RegionProvider } from "@/lib/regionStore";
-import { ScanResultProvider } from "@/lib/scanResult";
-import { ScanSettingsProvider } from "@/lib/scanSettings";
-import { ToastProvider } from "@/lib/toast";
-import { resolveTheme, THEMES, ThemeContext, type ThemePreference } from "@/lib/theme";
+import { DATABASE_NAME, DATABASE_OPTIONS, migrateDbAsync } from "@/features/history/db";
+import { RegionProvider } from "@/features/region/regionStore";
+import { ScanResultSheet } from "@/features/scan/ScanResultSheet";
+import { ScanResultProvider } from "@/features/scan/scanResult";
+import { ScanSettingsProvider } from "@/features/scan/scanSettings";
+import { ErrorToast } from "@/ui/ErrorToast";
+import { resolveTheme, THEMES, ThemeContext, type ThemePreference } from "@/ui/theme";
+import { ToastProvider } from "@/ui/toast";
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({

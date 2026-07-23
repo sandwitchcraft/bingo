@@ -52,4 +52,4 @@ npx expo start
 Expo Go isn't compatible with this project's SDK version, so running on a physical device or
 simulator needs a local dev build.
 
-The current build punch list is in [TODO.md](TODO.md).
+The current build punch list is in [docs/product/TODO.md](docs/product/TODO.md).

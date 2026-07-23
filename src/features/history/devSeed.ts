@@ -1,8 +1,8 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
-import { insertScanAt } from "@/lib/db";
-import { getBinForItem, getItemKeys, getRegionName } from "@/lib/regionData";
-import type { RegionRules } from "@/lib/regionSource";
+import { insertScanAt } from "@/features/history/db";
+import { getBinForItem, getItemKeys, getRegionName } from "@/features/region/regionData";
+import type { RegionRules } from "@/features/region/regionSource";
 
 /**
  * Days before today for each seeded scan, oldest first. Fixed rather than random so

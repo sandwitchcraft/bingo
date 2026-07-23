@@ -1,6 +1,6 @@
 import { Text, type TextStyle } from "react-native";
 
-import { colors, FONT, useTheme } from "@/lib/theme";
+import { colors, FONT, useTheme } from "@/ui/theme";
 
 type Props = {
   size?: number;

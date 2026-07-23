@@ -9,7 +9,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState, type
  * already looking at (the region picker's inline line) still belongs next to the thing that
  * failed. This is for errors with nowhere else to surface.
  *
- * State lives here; `components/ErrorToast.tsx` renders it. Both are mounted once, at the
+ * State lives here; `ErrorToast.tsx` renders it. Both are mounted once, at the
  * root, so any screen can raise one without owning any UI for it.
  */
 

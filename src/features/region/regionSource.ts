@@ -1,7 +1,7 @@
 import bundledToronto from "@/assets/data/canada/ontario/toronto/toronto.json";
-import type { BinType } from "@/lib/bins";
-import { fetchJSON } from "@/lib/net";
-import { getJSON, listKeys, removeKey, setJSON, StorageKeys } from "@/lib/storage";
+import type { BinType } from "@/core/bins";
+import { fetchJSON } from "@/core/net";
+import { getJSON, listKeys, removeKey, setJSON, StorageKeys } from "@/core/storage";
 
 /**
  * bingoDB — the remote sorting-rules database. React-free on purpose (same as `db.ts`):
@@ -9,7 +9,10 @@ import { getJSON, listKeys, removeKey, setJSON, StorageKeys } from "@/lib/storag
  *
  * Layout: an index at the root lists every region; each entry's `url` is relative to the
  * base. GitHub Pages can't list directories, so the index is the ONLY way to discover what
- * exists — see `docs/bingoDB-index.json` for the contract it's generated against.
+ * exists. It is always fetched and never bundled — `parseRegionIndex` below is this repo's
+ * statement of the contract: `id` and `url` are the only required fields, everything else is
+ * derived when absent, and an entry missing those is skipped rather than failing the whole
+ * index. bingoDB owns the schema; the app parses what it emits and doesn't rename its fields.
  */
 export const BASE_URL = "https://sandwitchcraft.github.io/bingoDB/";
 

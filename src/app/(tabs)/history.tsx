@@ -1,13 +1,22 @@
+/**
+ * History tab: the list of past scans, newest first, read from SQLite through
+ * `useScanHistory` (which refetches on focus).
+ *
+ * Rows store the item **key**, so the display name and bin colour are resolved against the
+ * *currently active* region's rules at render time — an old scan re-renders under whatever
+ * rules are loaded now, which is intentional. `formatScannedAt` below is the only
+ * date-rendering rule: time alone for today, date · time once it isn't.
+ */
 import { FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Wordmark } from "@/components/Wordmark";
-import { BIN_LABEL, binColor } from "@/lib/bins";
-import { parseScannedAt, type ScanHistoryRow } from "@/lib/db";
-import { getItemDisplayName } from "@/lib/regionData";
-import { useRegionRules } from "@/lib/regionStore";
-import { FONT, radii, useTheme } from "@/lib/theme";
-import { useScanHistory } from "@/lib/useScanHistory";
+import { BIN_LABEL, binColor } from "@/core/bins";
+import { parseScannedAt, type ScanHistoryRow } from "@/features/history/db";
+import { useScanHistory } from "@/features/history/useScanHistory";
+import { getItemDisplayName } from "@/features/region/regionData";
+import { useRegionRules } from "@/features/region/regionStore";
+import { Wordmark } from "@/ui/Wordmark";
+import { FONT, radii, useTheme } from "@/ui/theme";
 
 /** Date only once it's no longer today, since the day is the useful part by then. */
 function formatScannedAt(scannedAt: string): string {

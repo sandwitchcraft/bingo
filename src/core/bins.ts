@@ -1,4 +1,4 @@
-import { binColors } from "@/lib/brand";
+import { binColors } from "@/ui/brand";
 
 /**
  * The bin vocabulary, defined by bingoDB — these are the exact `bin` strings the remote
