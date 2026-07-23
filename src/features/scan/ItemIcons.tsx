@@ -143,7 +143,25 @@ function GenericIcon(p: IconProps) {
 }
 
 // Covers the current Toronto item set; anything unmapped falls back to a generic box.
+// Keyed by bingoDB item key (kebab-case), which is also what the classifier's classes
+// resolve to — so the keys below are the ones a live scan and a region rule both produce.
+// Several categories share a glyph on purpose: the pictogram names the material, and a
+// styrofoam cup and a styrofoam takeout container are the same material story.
 const ITEM_ICON: Record<string, (p: IconProps) => React.ReactElement> = {
+  "aluminum-can": CanIcon,
+  "apple-core": FoodWasteIcon,
+  "cardboard-box": PaperIcon,
+  "cardboard-takeout-container": PaperIcon,
+  "disposable-batteries": BatteryIcon,
+  "glass-bottle": JarIcon,
+  "paper-cup": PaperIcon,
+  "paper-printer": PaperIcon,
+  "plastic-bottle": BottleIcon,
+  "styrofoam-cup": StyrofoamIcon,
+  "styrofoam-takeout-container": StyrofoamIcon,
+
+  // Legacy snake_case keys. History rows written before bingoDB's 2026-07-22 kebab-case
+  // switch still carry these, and the History screen looks up icons by the stored key.
   plastic_bottle: BottleIcon,
   aluminum_can: CanIcon,
   glass_jar: JarIcon,
