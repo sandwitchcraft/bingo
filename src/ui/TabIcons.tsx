@@ -1,9 +1,9 @@
 /**
- * The three bottom-nav glyphs — `ScanIcon`, `HistoryIcon`, `SettingsIcon` — used only by
- * `src/app/(tabs)/_layout.tsx`. Same pictogram spec as `ItemIcons.tsx` and `RegionIcons.tsx`:
+ * The bottom-nav glyphs — `ScanIcon`, `HistoryIcon`, `SearchIcon`, `SettingsIcon` — used only
+ * by `src/app/(tabs)/_layout.tsx`. Same pictogram spec as `ItemIcons.tsx` and `RegionIcons.tsx`:
  * 24px grid, single-weight stroke, round caps, no fill.
  */
-import Svg, { Circle, Path, Polyline } from "react-native-svg";
+import Svg, { Circle, Line, Path, Polyline } from "react-native-svg";
 
 type IconProps = { size: number; color: string };
 
@@ -36,6 +36,23 @@ export function HistoryIcon({ size, color }: IconProps) {
         strokeWidth={STROKE}
         strokeLinecap="round"
         strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+export function SearchIcon({ size, color }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={11} cy={11} r={7} stroke={color} strokeWidth={STROKE} />
+      <Line
+        x1={16}
+        y1={16}
+        x2={21}
+        y2={21}
+        stroke={color}
+        strokeWidth={STROKE}
+        strokeLinecap="round"
       />
     </Svg>
   );

@@ -9,10 +9,9 @@
  * `COLLAPSED_HEIGHT` / `SNAP_THRESHOLD` pair below. Note the visibility-only effect further
  * down: its dep array is hand-maintained, since this project has no `exhaustive-deps` lint.
  */
-import * as WebBrowser from "expo-web-browser";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   interpolate,
@@ -24,11 +23,9 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BIN_LABEL, binColor, binSurface } from "@/core/bins";
-import { resolveScanResult } from "@/features/region/regionData";
-import { useRegionRules } from "@/features/region/regionStore";
+import { ResultView } from "@/features/scan/ResultView";
 import { useScanResult } from "@/features/scan/scanResult";
-import { FONT, radii, useTheme } from "@/ui/theme";
+import { useTheme } from "@/ui/theme";
 
 const COLLAPSED_HEIGHT = 320; // visible content height when collapsed
 const SNAP_THRESHOLD = 60; // drag travel to switch snap state
@@ -37,7 +34,6 @@ const SHEET_EASING = Easing.bezier(0.32, 0.72, 0, 1);
 export function ScanResultSheet() {
   const { activeItemKey, dismiss } = useScanResult();
   const { theme } = useTheme();
-  const rules = useRegionRules();
   const router = useRouter();
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -126,13 +122,6 @@ export function ScanResultSheet() {
 
   if (!visible || !activeItemKey) return null;
 
-  const result = resolveScanResult(rules, activeItemKey);
-  const surface = binSurface(result.bin);
-  const accent = binColor(result.bin);
-  // The region's own copy-edited name; resolveScanResult formats the key for items
-  // the region doesn't list, so this is always populated.
-  const itemName = result.display_name;
-
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {/* Scrim — only intercepts touches while expanded */}
@@ -161,59 +150,18 @@ export function ScanResultSheet() {
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Item header. With no pictogram, the item name itself carries the outcome
-              color — `accent` is the bin's color, so a recycling item reads Harbor,
-              compost reads sprout, and so on. */}
-          <View style={styles.itemHeader}>
-            <Text style={[styles.eyebrow, { color: theme.textMuted }]}>Identified item</Text>
-            <Text style={[styles.itemName, { color: accent }]}>{itemName}</Text>
-          </View>
-
-          {/* Bin outcome card */}
-          <View style={[styles.binCard, { backgroundColor: surface.bg, borderColor: surface.border }]}>
-            <Text style={[styles.eyebrow, { color: theme.textMuted }]}>Sort into</Text>
-            <Text style={[styles.binLabel, { color: accent }]}>{BIN_LABEL[result.bin]}</Text>
-          </View>
-
-          {/* Handling detail */}
-          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-            <Text style={[styles.eyebrow, { color: theme.textMuted }]}>Why</Text>
-            <Text style={[styles.body, { color: theme.textBody }]}>{result.description}</Text>
-          </View>
-
-          {/* Consult-guide link */}
-          {result.link && (
-            <Pressable
-              style={[styles.linkRow, { borderColor: surface.border, backgroundColor: surface.bg }]}
-              onPress={() => WebBrowser.openBrowserAsync(result.link!)}
-            >
-              <Text style={[styles.linkText, { color: accent }]}>View local disposal guide ↗</Text>
-            </Pressable>
-          )}
-
-          {/* Actions */}
-          <View style={styles.actions}>
-            <Pressable
-              style={[styles.btn, { backgroundColor: theme.secondaryBg }]}
-              onPress={close}
-            >
-              <Text style={[styles.btnText, { color: theme.secondaryText }]}>Scan another</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.btn, { backgroundColor: theme.primary }]}
-              onPress={() => {
-                dismiss();
-                router.push("/history");
-              }}
-            >
-              <Text style={[styles.btnText, { color: theme.primaryText }]}>View history</Text>
-            </Pressable>
-          </View>
-
-          {/* Report (deferred wiring) */}
-          <Pressable style={styles.reportRow} onPress={() => {}}>
-            <Text style={[styles.reportText, { color: theme.textMuted }]}>Report incorrect sort</Text>
-          </Pressable>
+          {/* Shared with the full-screen search result (app/item.tsx) so the two are
+              identical. The only context-specific action is the left button — here it
+              closes the sheet to scan again; on the search screen it goes back to search. */}
+          <ResultView
+            itemKey={activeItemKey}
+            primaryActionLabel="Scan another"
+            onPrimaryAction={close}
+            onViewHistory={() => {
+              dismiss();
+              router.push("/history");
+            }}
+          />
         </ScrollView>
       </Animated.View>
     </View>
@@ -245,63 +193,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     gap: 16,
   },
-  itemHeader: {
-    paddingTop: 4,
-  },
-  eyebrow: {
-    fontFamily: FONT.utility,
-    fontSize: 10,
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-  },
-  itemName: {
-    fontFamily: FONT.display,
-    fontSize: 26,
-    letterSpacing: -0.4,
-    marginTop: 3,
-  },
-  binCard: {
-    borderRadius: radii.card,
-    borderWidth: 1,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-  },
-  binLabel: {
-    fontFamily: FONT.heading,
-    fontSize: 20,
-    letterSpacing: -0.2,
-    marginTop: 3,
-  },
-  card: {
-    borderRadius: radii.card,
-    borderWidth: 1,
-    padding: 18,
-    gap: 8,
-  },
-  body: {
-    fontFamily: FONT.body,
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  linkRow: {
-    borderRadius: radii.card,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  linkText: { fontFamily: FONT.utilityStrong, fontSize: 12 },
-  actions: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  btn: {
-    flex: 1,
-    borderRadius: radii.button,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  btnText: { fontFamily: FONT.utilityStrong, fontSize: 12 },
-  reportRow: { alignItems: "center", paddingVertical: 4 },
-  reportText: { fontFamily: FONT.utility, fontSize: 11, letterSpacing: 0.2 },
 });

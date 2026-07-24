@@ -9,7 +9,7 @@ import { Tabs, type BottomTabBarProps } from "expo-router/js-tabs";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { HistoryIcon, ScanIcon, SettingsIcon } from "@/ui/TabIcons";
+import { HistoryIcon, ScanIcon, SearchIcon, SettingsIcon } from "@/ui/TabIcons";
 import { accent, FONT, useTheme } from "@/ui/theme";
 
 type TabDef = {
@@ -19,10 +19,11 @@ type TabDef = {
   size: number;
 };
 
-// Spec order: History (left), Scan (center), Settings (right).
+// Order: History (left), Scan and Search (the two large center tabs), Settings (right).
 const TAB_ORDER: TabDef[] = [
   { name: "history", label: "History", Icon: HistoryIcon, size: 22 },
   { name: "index", label: "Scan", Icon: ScanIcon, size: 30 },
+  { name: "search", label: "Search", Icon: SearchIcon, size: 30 },
   { name: "settings", label: "Settings", Icon: SettingsIcon, size: 22 },
 ];
 
@@ -85,6 +86,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" />
       <Tabs.Screen name="history" />
+      <Tabs.Screen name="search" />
       <Tabs.Screen name="settings" />
     </Tabs>
   );

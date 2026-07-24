@@ -12,7 +12,8 @@ find-and-replace.
 app/                 expo-router routes. The file tree IS the navigation graph.
   _layout.tsx          root: fonts, theme state, provider stack, global overlays
   region.tsx           full-screen region picker (pushed from Settings, not a tab)
-  (tabs)/              the three-tab shell: index=Scan, history, settings
+  item.tsx             full-screen item result (pushed from Search, not a tab)
+  (tabs)/              the four-tab shell: index=Scan, history, search, settings
 
 features/
   region/            which rules are in use, and where they came from
@@ -21,6 +22,9 @@ features/
     regionData.ts      pure lookups over one region's rules
     location.ts        GPS → reverse geocode → catalog match
     RegionIcons.tsx    download-state glyphs for the picker
+
+  search/            look an item up by name (the manual counterpart to scan)
+    searchItems.ts     pure ranked text search over one region's items
 
   scan/              camera → model → result
     classifier.ts      model I/O: tensor dtypes, thresholds, label → item-key mapping

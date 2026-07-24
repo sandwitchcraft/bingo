@@ -96,6 +96,9 @@ export default function RootLayout() {
                     {/* Not a tab — pushed from Settings, and the native stack's
                         slide-from-right is what gives it its reveal (and back-swipe). */}
                     <Stack.Screen name="region" options={{ animation: "slide_from_right" }} />
+                    {/* The full-screen item result, pushed from the Search tab. Same
+                        native slide (and back-swipe) as the region picker. */}
+                    <Stack.Screen name="item" options={{ animation: "slide_from_right" }} />
                   </Stack>
                   <ScanResultSheet />
                   {/* Last, so the banner floats above the result sheet as well as the tabs. */}
