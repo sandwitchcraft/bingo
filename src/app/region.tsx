@@ -31,11 +31,12 @@ import { useToast } from "@/ui/toast";
  * stack's `slide_from_right` (configured in `_layout.tsx`) rather than a hand-rolled
  * transform, so the interactive back-swipe comes with it.
  *
- * Two separate actions per row, which is the thing to keep straight when reading this: the
- * **cloud icon downloads** (stores the rules; changes nothing about what you're sorting
- * against right now), and the **row body selects**. Selection is gated on the download, so a
- * row is inert until its rules are actually on disk — which is also what lets `selectRegion`
- * read from the cache and work with no network at all.
+ * Two actions per row, which is the thing to keep straight when reading this: the **row body
+ * downloads-then-selects** (whatever it takes to start sorting against this region — a fetch
+ * if the rules aren't on disk yet, then the switch), and the **cloud icon downloads only**
+ * (stores the rules; changes nothing about what you're sorting against right now — the
+ * saving-ahead-of-a-trip case). Once a region is downloaded, `selectRegion` reads it from the
+ * cache, so switching back to it later works with no network at all.
  */
 
 /**
@@ -162,13 +163,25 @@ export default function RegionScreen() {
       return;
     }
     setPendingSelectId(region.id);
-    selectRegion(region)
+    // Tapping a not-yet-downloaded row downloads its rules first, then selects — one gesture
+    // for the common case. The cloud icon still downloads *without* switching, which is the
+    // saving-ahead-of-a-trip case. A row already downloading via that icon just gets its rules
+    // fetched again here (a ~4 KB no-op); we don't try to adopt the in-flight request.
+    const isDownloaded = downloadedIds.has(region.id);
+    const ready = isDownloaded ? Promise.resolve() : downloadRegion(region);
+    ready
+      .then(() => selectRegion(region))
       .then(() => router.back())
       .catch((error: unknown) => {
-        // Reading a downloaded region back off disk shouldn't fail; if it does, the previous
-        // region stays selected — selectRegion only commits once it has rules in hand.
+        // A fresh download can fail on the network; selecting a downloaded region reads off
+        // disk and shouldn't. Either way the previous region stays selected — selectRegion
+        // only commits once it has rules in hand.
         console.warn("[region] failed to switch region", error);
-        showError(`Couldn't switch to ${region.displayName}. Its saved rules may be damaged.`);
+        showError(
+          isDownloaded
+            ? `Couldn't switch to ${region.displayName}. Its saved rules may be damaged.`
+            : `Couldn't download ${region.displayName}. Check your connection and try again.`,
+        );
         setPendingSelectId(null);
       });
   };
@@ -205,16 +218,14 @@ export default function RegionScreen() {
         style={({ pressed }) => [
           styles.row,
           { backgroundColor: theme.card, borderColor: isSelected ? accent[name] : theme.cardBorder },
-          // Dimmed rather than hidden: the region exists and is selectable, just not yet.
-          !isDownloaded && styles.rowDisabled,
-          pressed && isDownloaded && { backgroundColor: theme.bgInput },
+          pressed && { backgroundColor: theme.bgInput },
         ]}
         onPress={() => choose(item)}
-        disabled={!isDownloaded || isSelecting}
+        disabled={isSelecting}
         accessibilityRole="button"
-        accessibilityState={{ selected: isSelected, disabled: !isDownloaded, busy: isSelecting }}
+        accessibilityState={{ selected: isSelected, busy: isSelecting }}
         accessibilityHint={
-          isDownloaded ? undefined : "Download this region before you can select it"
+          isDownloaded ? undefined : "Downloads this region and switches to it"
         }
       >
         <View style={styles.rowText}>
@@ -388,7 +399,6 @@ const styles = StyleSheet.create({
   // cloud/check glyphs still reads straight down the list.
   rowActions: { flexDirection: "row", alignItems: "center", gap: 16 },
   rowGap: { height: 10 },
-  rowDisabled: { opacity: 0.55 },
   rowText: { flexShrink: 1 },
   rowName: { fontFamily: FONT.heading, fontSize: 16 },
   rowSub: {
