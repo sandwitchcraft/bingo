@@ -34,6 +34,7 @@ export default function ItemScreen() {
           primaryActionLabel="Search again"
           onPrimaryAction={() => router.back()}
           onViewHistory={() => router.push("/history")}
+          context="search"
         />
       </ScrollView>
     </SafeAreaView>

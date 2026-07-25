@@ -2,6 +2,9 @@
 
 Running punch list. Check things off as they land; add new items as they come up.
 
+## Known Bugs
+- [ ] 'notes' feature on the item reporting tool has weird keyboard effect.
+
 ## Data
 - [x] Rules now come from bingoDB (`https://sandwitchcraft.github.io/bingoDB/`) rather than a
       bundled file — `regionSource.ts` fetches/validates/caches, `regionStore.tsx` holds the
@@ -35,7 +38,26 @@ Running punch list. Check things off as they land; add new items as they come up
 - [ ] Revisit `getRandomItemKey` and the "Sort a random item" row. Less load-bearing now that
       the model can produce real item keys, but still the only way to exercise a key no
       ImageNet class maps to (the four above).
-- [ ] Wire the "Report incorrect sort" row in `ScanResultSheet` — currently a no-op placeholder
+- [x] Wire the "Report incorrect sort" row — opens the root-mounted `ReportSheet` for both hosts
+      (scan sheet and search result). Choice step (`wrong_bin` / `wrong_item`, scan-only) → form
+      (corrected bin + notes) → success; submits to Supabase via `submitReport`. See **Backend**.
+
+## Backend (Supabase)
+- [x] Supabase client (`src/core/supabase.ts`) — publishable key + URL from `.env.local`
+      (`EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_KEY`, both gitignored), session
+      persistence off. Connection + RLS + storage verified end to end (smoke test, 9/9).
+- [x] `submitReport` / `submitTrainingImage` (`src/features/reports/reports.ts`) — insert-only
+      against RLS policies. `region` is the full path (`canada/ontario/toronto`) via
+      `getRegionPath`; `report_type` keeps `wrong_bin` vs `wrong_item` distinct; the note
+      preserves the originally-shown bin. Training images carry **no** device/user id by policy.
+- [x] "Report incorrect sort" flow wired to `submitReport` (see Scan flow).
+- [ ] "Help improve Bin-go" training-image opt-in — **defaults OFF**, fire-and-forget upload of a
+      compressed scan photo via `submitTrainingImage`. Blocked on a photo-capture path: the scan
+      pipeline is frame-only and saves no image, so there's nothing to upload yet.
+- [ ] Remove the `__DEV__` "Test backend report" button in Settings before release — it's a
+      dev-only connectivity probe, not shipping UI.
+- [ ] Anti-abuse for reports is unplanned (no device id on reports either). If spam becomes a
+      problem, decide whether a hashed device id on `reports` (not `training_images`) is worth it.
 
 ## Screens (currently stubs)
 - [ ] History screen: reads real data now (plain list of scans), but still needs the designed

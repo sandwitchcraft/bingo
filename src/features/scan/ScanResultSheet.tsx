@@ -161,6 +161,7 @@ export function ScanResultSheet() {
               dismiss();
               router.push("/history");
             }}
+            context="scan"
           />
         </ScrollView>
       </Animated.View>

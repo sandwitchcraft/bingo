@@ -21,6 +21,12 @@ export const StorageKeys = {
   regionRulesPrefix: "bingo.region.rules.",
   /** One entry per region, so switching back to a previous region is instant and offline. */
   regionRules: (regionId: string) => `bingo.region.rules.${regionId}`,
+  /**
+   * Anonymous per-device UUID for "report incorrect sort". Generated once, persisted, never
+   * tied to a real identity — it only tells "5 devices flagged this" from "1 device, 5 times".
+   * Deliberately absent from the training-image flow, which carries no identifier at all.
+   */
+  deviceId: "bingo.device_id",
 } as const;
 
 export async function getJSON<T>(key: string): Promise<T | null> {

@@ -19,7 +19,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { clearScanHistory } from "@/features/history/db";
 import { seedScanHistory } from "@/features/history/devSeed";
 import { detectRegion, locationErrorMessage } from "@/features/region/location";
-import { getRandomItemKey, getRegionName } from "@/features/region/regionData";
+import { getRandomItemKey, getRegionName, getRegionPath } from "@/features/region/regionData";
+import { submitReport } from "@/features/reports/reports";
 import { regionSubtitle } from "@/features/region/regionSource";
 import { useRegion } from "@/features/region/regionStore";
 import { useScanResult } from "@/features/scan/scanResult";
@@ -153,6 +154,25 @@ export default function SettingsScreen() {
         showError("Couldn't reach the rules database. Check your connection and try again.");
       })
       .finally(() => setRefreshing(false));
+  };
+
+  // Dev-only backend smoke check: exercises the Supabase path through the RN runtime
+  // (url-polyfill + supabase-js insert + the persisted anonymous device id). No image, so it
+  // isolates the table insert from the storage upload. Stripped from release builds.
+  const [backendResult, setBackendResult] = useState<string | null>(null);
+  const testBackendReport = () => {
+    setBackendResult(null);
+    submitReport({
+      region: getRegionPath(rules),
+      itemKey: "plastic-bottle",
+      reportedBin: "recycling",
+      reportType: "wrong_bin",
+      userNote: "__DEV_TEST__",
+    })
+      .then(({ success, error }) =>
+        setBackendResult(success ? "Report submitted — backend reachable." : `Failed: ${error}`),
+      )
+      .catch((error: unknown) => setBackendResult(`Threw: ${String(error)}`));
   };
 
   const runSeed = () => {
@@ -399,6 +419,38 @@ export default function SettingsScreen() {
               <Text style={[styles.rowAction, { color: theme.textMuted }]}>Seed</Text>
             </Pressable>
           </View>
+        )}
+
+        {/* Dev-only backend connectivity check. Inserts a tagged report row via Supabase to
+            confirm the anonymous client works through the RN runtime. Stripped from release. */}
+        {__DEV__ && (
+          <>
+            <View
+              style={[
+                styles.card,
+                styles.stackedRow,
+                { backgroundColor: theme.card, borderColor: theme.cardBorder },
+              ]}
+            >
+              <Text style={[styles.rowLabel, { color: theme.textBody }]}>Test backend report</Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  { borderColor: theme.cardBorder },
+                  pressed && { backgroundColor: theme.bgInput },
+                ]}
+                onPress={testBackendReport}
+                hitSlop={8}
+              >
+                <Text style={[styles.rowAction, { color: theme.textMuted }]}>Send</Text>
+              </Pressable>
+            </View>
+            {backendResult != null && (
+              <Text style={[styles.rowHint, { color: theme.textMuted }, styles.detectedNote]}>
+                {backendResult}
+              </Text>
+            )}
+          </>
         )}
 
         {/* Ships in release builds, unlike the seeder above. Sorts a random item from the

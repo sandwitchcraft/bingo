@@ -26,6 +26,8 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { DATABASE_NAME, DATABASE_OPTIONS, migrateDbAsync } from "@/features/history/db";
 import { RegionProvider } from "@/features/region/regionStore";
+import { ReportProvider } from "@/features/reports/reportStore";
+import { ReportSheet } from "@/features/reports/ReportSheet";
 import { ScanResultSheet } from "@/features/scan/ScanResultSheet";
 import { ScanResultProvider } from "@/features/scan/scanResult";
 import { ScanSettingsProvider } from "@/features/scan/scanSettings";
@@ -91,18 +93,25 @@ export default function RootLayout() {
                   for the bin outcome and the region name it stores. */}
               <RegionProvider>
                 <ScanResultProvider>
-                  <Stack screenOptions={{ headerShown: false }}>
-                    <Stack.Screen name="(tabs)" />
-                    {/* Not a tab — pushed from Settings, and the native stack's
-                        slide-from-right is what gives it its reveal (and back-swipe). */}
-                    <Stack.Screen name="region" options={{ animation: "slide_from_right" }} />
-                    {/* The full-screen item result, pushed from the Search tab. Same
-                        native slide (and back-swipe) as the region picker. */}
-                    <Stack.Screen name="item" options={{ animation: "slide_from_right" }} />
-                  </Stack>
-                  <ScanResultSheet />
-                  {/* Last, so the banner floats above the result sheet as well as the tabs. */}
-                  <ErrorToast />
+                  {/* Holds the report sheet's open/close state; the sheet is rendered below,
+                      above the result sheet but under the toast. */}
+                  <ReportProvider>
+                    <Stack screenOptions={{ headerShown: false }}>
+                      <Stack.Screen name="(tabs)" />
+                      {/* Not a tab — pushed from Settings, and the native stack's
+                          slide-from-right is what gives it its reveal (and back-swipe). */}
+                      <Stack.Screen name="region" options={{ animation: "slide_from_right" }} />
+                      {/* The full-screen item result, pushed from the Search tab. Same
+                          native slide (and back-swipe) as the region picker. */}
+                      <Stack.Screen name="item" options={{ animation: "slide_from_right" }} />
+                    </Stack>
+                    <ScanResultSheet />
+                    {/* Above the result sheet and tabs; still under the toast below. */}
+                    <ReportSheet />
+                    {/* Last, so the banner floats above the report and result sheets as well
+                        as the tabs. */}
+                    <ErrorToast />
+                  </ReportProvider>
                 </ScanResultProvider>
               </RegionProvider>
             </ToastProvider>

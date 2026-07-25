@@ -14,6 +14,15 @@ export function getRegionName(rules: RegionRules): string {
   return rules.district_name;
 }
 
+/**
+ * The region's full administrative path, slash-joined: `"canada/ontario/toronto"`. Used as the
+ * `region` value sent to the backend (reports / training images) so a row is unambiguous about
+ * which municipality it came from — a bare leaf like `"toronto"` collides across provinces.
+ */
+export function getRegionPath(rules: RegionRules): string {
+  return rules.location_path.join("/");
+}
+
 export function getBinForItem(rules: RegionRules, itemKey: string): BinResult | null {
   return rules.items[itemKey] ?? null;
 }

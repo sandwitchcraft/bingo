@@ -19,6 +19,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { BIN_LABEL, binColor, binSurface } from "@/core/bins";
 import { resolveScanResult } from "@/features/region/regionData";
 import { useRegionRules } from "@/features/region/regionStore";
+import { useReport, type ReportContext } from "@/features/reports/reportStore";
 import { FONT, radii, useTheme } from "@/ui/theme";
 
 type ResultViewProps = {
@@ -27,8 +28,11 @@ type ResultViewProps = {
   primaryActionLabel: string;
   onPrimaryAction: () => void;
   onViewHistory: () => void;
-  /** Deferred wiring; defaults to a no-op so the row is always present in both hosts. */
-  onReport?: () => void;
+  /**
+   * Which host this is rendered in. Drives the report flow: only `scan` can report a
+   * misidentification (search picks the item by name), so `search` skips that choice.
+   */
+  context: ReportContext;
 };
 
 export function ResultView({
@@ -36,10 +40,11 @@ export function ResultView({
   primaryActionLabel,
   onPrimaryAction,
   onViewHistory,
-  onReport,
+  context,
 }: ResultViewProps) {
   const { theme } = useTheme();
   const rules = useRegionRules();
+  const { open: openReport } = useReport();
 
   // resolveScanResult always returns a result — a real rule, or the consult-guide fallback
   // for a key this region doesn't list — so there's no not-found state to handle.
@@ -91,8 +96,8 @@ export function ResultView({
         </Pressable>
       </View>
 
-      {/* Report (deferred wiring) */}
-      <Pressable style={styles.reportRow} onPress={onReport ?? (() => {})}>
+      {/* Report incorrect sort — opens the root-mounted report sheet for this item. */}
+      <Pressable style={styles.reportRow} onPress={() => openReport(itemKey, context)}>
         <Text style={[styles.reportText, { color: theme.textMuted }]}>Report incorrect sort</Text>
       </Pressable>
     </Fragment>
