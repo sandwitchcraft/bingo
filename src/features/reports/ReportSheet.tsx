@@ -14,8 +14,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -174,11 +172,7 @@ export function ReportSheet() {
         <Pressable style={StyleSheet.absoluteFill} onPress={close} />
       </Animated.View>
 
-      <KeyboardAvoidingView
-        style={styles.anchor}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        pointerEvents="box-none"
-      >
+      <View style={styles.anchor} pointerEvents="box-none">
         <Animated.View
           onLayout={(e) => onSheetLayout(e.nativeEvent.layout.height)}
           style={[
@@ -254,7 +248,17 @@ export function ReportSheet() {
               entering={context === "scan" ? SlideInRight.duration(240) : undefined}
               style={styles.body}
             >
-              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              {/* The sheet stays anchored at the bottom when the keyboard opens — deliberately
+                  NOT lifted to fill the screen, so the scrim above it stays tappable and the
+                  grabber stays swipeable, both of which dismiss the sheet mid-edit. Instead iOS
+                  insets this scroll view by the keyboard and scrolls the focused field
+                  (the Notes box) up into the space that remains above the keyboard. */}
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                automaticallyAdjustKeyboardInsets
+                showsVerticalScrollIndicator={false}
+              >
                 <Text style={[styles.formTitle, { color: theme.text }]}>Submit a report</Text>
 
                 <Text style={[styles.fieldLabel, { color: theme.textMuted }]}>Item</Text>
@@ -349,7 +353,7 @@ export function ReportSheet() {
             </Animated.View>
           )}
         </Animated.View>
-      </KeyboardAvoidingView>
+      </View>
     </View>
   );
 }

@@ -21,6 +21,7 @@ import {
   ExternalLinkIcon,
   StopCircleIcon,
 } from "@/features/region/RegionIcons";
+import { detectRegion, locationErrorMessage } from "@/features/region/location";
 import { BUNDLED_REGION_ID, regionSubtitle, type RegionSummary } from "@/features/region/regionSource";
 import { useRegion } from "@/features/region/regionStore";
 import { accent, colors, FONT, radii, useTheme } from "@/ui/theme";
@@ -78,6 +79,7 @@ export default function RegionScreen() {
   // case this whole feature exists for.
   const [downloads, setDownloads] = useState<Record<string, DownloadState>>({});
   const [pendingSelectId, setPendingSelectId] = useState<string | null>(null);
+  const [detecting, setDetecting] = useState(false);
 
   // Kept out of state: aborting and clearing timers are imperative, and re-rendering on
   // every controller change would buy nothing.
@@ -184,6 +186,35 @@ export default function RegionScreen() {
         );
         setPendingSelectId(null);
       });
+  };
+
+  // GPS → Nominatim → a region in the catalog, selected on the spot. It lives here at the top
+  // of the picker (rather than in Settings) so the manual list is right below it as the
+  // fallback for every failure. selectRegion downloads the rules first if they aren't cached,
+  // so detecting a region you've never opened still works. Success shows as the row's ACTIVE
+  // marker updating; failures surface in the toast.
+  const detect = () => {
+    if (detecting) return;
+    setDetecting(true);
+    const run = async () => {
+      let match: RegionSummary;
+      try {
+        match = await detectRegion(catalog);
+      } catch (error) {
+        console.warn("[region] location detection failed", error);
+        showError(locationErrorMessage(error));
+        return;
+      }
+      if (match.id === selectedId) return; // already sorting against it — nothing to switch
+      try {
+        await selectRegion(match);
+      } catch (error) {
+        // The location half worked, so don't send the user to their location settings.
+        console.warn("[region] failed to load the detected region", error);
+        showError(`Found ${match.displayName}, but its rules wouldn't download. Check your connection.`);
+      }
+    };
+    run().finally(() => setDetecting(false));
   };
 
   // Leaves the app for the municipality's own waste page — the authority the rules were
@@ -329,6 +360,28 @@ export default function RegionScreen() {
         />
       </View>
 
+      {/* Locked above the list — always reachable, never scrolls away with the results. */}
+      <View style={styles.detectWrap}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.detectButton,
+            { borderColor: accent[name], backgroundColor: theme.card },
+            pressed && { backgroundColor: theme.bgInput },
+          ]}
+          onPress={detect}
+          disabled={detecting}
+          accessibilityRole="button"
+          accessibilityLabel="Detect my region from location"
+          accessibilityState={{ busy: detecting }}
+        >
+          {detecting ? (
+            <ActivityIndicator size="small" color={accent[name]} />
+          ) : (
+            <Text style={[styles.detectText, { color: accent[name] }]}>Detect my location</Text>
+          )}
+        </Pressable>
+      </View>
+
       <SectionList
         sections={sections}
         keyExtractor={(item) => item.id}
@@ -368,6 +421,21 @@ const styles = StyleSheet.create({
   back: { fontFamily: FONT.utility, fontSize: 12, letterSpacing: 0.4 },
   heading: { fontFamily: FONT.heading, fontSize: 26, letterSpacing: -0.4, marginTop: 6 },
   searchWrap: { paddingHorizontal: 24, paddingBottom: 12 },
+  detectWrap: { paddingHorizontal: 24, paddingBottom: 4 },
+  // Accent-outlined, full width, fixed height so the spinner swap doesn't resize it.
+  detectButton: {
+    minHeight: 46,
+    borderWidth: 1,
+    borderRadius: radii.button,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  detectText: {
+    fontFamily: FONT.utilityStrong,
+    fontSize: 12,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
   search: {
     fontFamily: FONT.body,
     fontSize: 15,

@@ -1,15 +1,17 @@
 /**
  * Search tab — look an item up by name and open its bin result.
  *
- * The manual counterpart to the Scan tab: no camera, no model. Idle, it centers a prompt
- * (heading + field + hint); once the field is focused or holds text, the screen switches to
- * its active layout — the field at the top, the results list filling the rest. Selecting a
- * result, or pressing the keyboard's Search key, pushes the full-screen `item` window.
+ * The manual counterpart to the Scan tab: no camera, no model. A Wordmark header sits at the
+ * top in both states, matching the History and Settings tabs. Idle, the prompt (heading +
+ * field + hint) is centered in the space under that header via a pair of flex spacers; once
+ * the field is focused or holds text, the screen switches to its active layout — the field
+ * just under the header, the results list filling the rest. Selecting a result, or pressing
+ * the keyboard's Search key, pushes the full-screen `item` window.
  *
- * Structure mirrors the History tab exactly — a FlatList as a direct child of a flex:1
- * SafeAreaView — which is what makes it scroll. `keyboardDismissMode="on-drag"` means a
- * scroll hides the keyboard, bringing the tab bar back. The field carries a stable `key`
- * so the idle→active swap doesn't remount it (the keyboard survives the transition).
+ * The FlatList is a direct child of the flex:1 SafeAreaView, which is what makes it scroll.
+ * `keyboardDismissMode="on-drag"` means a scroll hides the keyboard, bringing the tab bar
+ * back. The field carries a stable `key` and stays a direct child of the container in both
+ * states, so the idle→active swap doesn't remount it (the keyboard survives the transition).
  *
  * The query lives in a module-level variable, so it survives leaving and returning to the
  * tab within a session but resets on a cold app launch (the module reloads fresh).
@@ -22,6 +24,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BIN_LABEL, binColor } from "@/core/bins";
 import { useRegionRules } from "@/features/region/regionStore";
 import { searchItems, type ItemHit } from "@/features/search/searchItems";
+import { Wordmark } from "@/ui/Wordmark";
 import { FONT, radii, useTheme } from "@/ui/theme";
 
 // Survives tab switches and navigating to a result and back — but not a relaunch, since the
@@ -56,6 +59,11 @@ export default function SearchScreen() {
   const results = useMemo(() => searchItems(rules, query), [rules, query]);
 
   const openItem = (itemKey: string) => {
+    // Dismiss the keyboard before pushing, not during. If it's still up when the slide
+    // starts, iOS animates it down over the transition and its QuickType/accessory strip
+    // detaches and hangs in the middle of the screen for the length of the animation.
+    // `engaged` stays latched, so the results list is still there when you come back.
+    Keyboard.dismiss();
     router.push({ pathname: "/item", params: { itemKey } });
   };
 
@@ -88,10 +96,17 @@ export default function SearchScreen() {
   };
 
   return (
-    <SafeAreaView
-      style={[styles.container, !active && styles.containerIdle, { backgroundColor: theme.bg }]}
-      edges={["top"]}
-    >
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={["top"]}>
+      {/* Wordmark header, matching the History and Settings tabs. */}
+      <View key="header" style={styles.header}>
+        <Wordmark size={15} />
+      </View>
+
+      {/* Idle centering is done with flex spacers around the prompt cluster rather than by
+          centering the whole screen — that keeps the header pinned at the top and, crucially,
+          keeps the field a stable direct child of this container in both states, so the
+          idle→active swap never remounts it and the keyboard survives the transition. */}
+      {!active && <View key="spacerTop" style={styles.flexSpacer} />}
       {!active && (
         <Text key="heading" style={[styles.heading, { color: theme.text }]}>
           Search for an item
@@ -129,6 +144,7 @@ export default function SearchScreen() {
           Tip: try searching “Hot Beverage Cup” instead of “Coffee Cup”.
         </Text>
       )}
+      {!active && <View key="spacerBottom" style={styles.flexSpacer} />}
 
       {active && (
         <FlatList
@@ -162,9 +178,11 @@ function RowGap() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 8 },
-  // Idle: no list, so center the prompt in the available space.
-  containerIdle: { justifyContent: "center", paddingTop: 0 },
+  container: { flex: 1 },
+  header: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 12 },
+  // Idle: paired with its twin below the prompt, this centers the prompt cluster in the
+  // space left under the header (see the layout note in the component).
+  flexSpacer: { flex: 1 },
   heading: {
     fontFamily: FONT.display,
     fontSize: 24,

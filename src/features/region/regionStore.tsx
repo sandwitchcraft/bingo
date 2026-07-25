@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { getString, setString, StorageKeys } from "@/core/storage";
+import { useToast } from "@/ui/toast";
 import {
   BASE_URL,
   BUNDLED_CATALOG,
@@ -27,13 +28,16 @@ import {
  * dropped — the app stays usable on whatever rules it already had, which is the whole point
  * of shipping a bundled region.
  */
-export type RefreshReport = {
-  refreshed: number;
-  /** Display names of regions whose refresh failed; the rest still landed. */
-  failed: string[];
-  /** The active region's rules after the pass, for reporting a version. */
-  active: RegionRules;
-};
+
+/**
+ * How long the app tolerates being unable to reach bingoDB before it warns the user. The
+ * launch check (index + active rules) records the time it last succeeded; past this window
+ * with no success, `RegionProvider` raises the stale-data toast.
+ */
+const RULES_CHECK_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000; // 15 days
+
+const STALE_RULES_MESSAGE =
+  "We haven't been able to check the database for updates recently. Please go online to check for the latest info!";
 
 type RegionValue = {
   rules: RegionRules;
@@ -66,12 +70,6 @@ type RegionValue = {
    * that's the payoff for gating selection on a download.
    */
   selectRegion: (summary: RegionSummary) => Promise<void>;
-  /**
-   * Re-fetch every downloaded region's rules, bypassing both caches. A region saved for a
-   * trip should be current when you reach for it, not whenever you last happened to select
-   * it. Rejects only if the active region itself can't be refreshed.
-   */
-  refreshDownloadedRules: () => Promise<RefreshReport>;
 };
 
 const RegionContext = createContext<RegionValue | null>(null);
@@ -87,6 +85,7 @@ function log(message: string) {
 }
 
 export function RegionProvider({ children }: { children: ReactNode }) {
+  const { showError } = useToast();
   const [rules, setRules] = useState<RegionRules>(BUNDLED_RULES);
   const [selectedId, setSelectedId] = useState<string>(BUNDLED_REGION_ID);
   const [catalog, setCatalog] = useState<RegionSummary[]>(BUNDLED_CATALOG);
@@ -106,14 +105,6 @@ export function RegionProvider({ children }: { children: ReactNode }) {
   // A slow index fetch must not overwrite a region the user picked while it was in flight.
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
-
-  // Read by refreshDownloadedRules, which stays a stable callback rather than being rebuilt
-  // every time the catalog or the download set changes identity.
-  const catalogRef = useRef(catalog);
-  catalogRef.current = catalog;
-
-  const downloadedIdsRef = useRef(downloadedIds);
-  downloadedIdsRef.current = downloadedIds;
 
   /**
    * Keeps the link map in step with a set of rules we just wrote to disk. Removes the entry
@@ -171,35 +162,55 @@ export function RegionProvider({ children }: { children: ReactNode }) {
         log(`index: no cache, seeded with ${BUNDLED_CATALOG.length} bundled regions`);
       }
 
-      // Refresh from the network. Both halves are independently optional: an unreachable
-      // index.json shouldn't stop the selected region's rules from updating.
+      // Refresh from the network. This is the automatic "check for updates" that runs on
+      // every app open — there is no manual button. Both halves are independently optional:
+      // an unreachable index.json shouldn't stop the selected region's rules from updating.
+      // `checkedOk` records whether either half actually reached bingoDB, which is what the
+      // staleness warning below keys off — reaching the server counts even if nothing changed.
+      let checkedOk = false;
       try {
         available = await fetchRegionIndex();
         if (cancelled) return;
         setCatalog(available);
         setCatalogIsFallback(false);
         await writeCachedIndex(available);
+        checkedOk = true;
         log(`index: ${available.length} regions fetched from ${BASE_URL}index.json`);
       } catch (error) {
         console.warn("[region] index refresh failed; using cached or bundled catalog", error);
       }
       if (cancelled) return;
 
-      try {
-        const summary = available.find((entry) => entry.id === savedId);
+      const summary = available.find((entry) => entry.id === savedId);
+      if (!summary) {
         // No index entry means no URL to fetch — the cached (or bundled) rules stand.
-        if (!summary) {
-          log(`rules: "${savedId}" not in the catalog; keeping cached or bundled rules`);
-          return;
+        log(`rules: "${savedId}" not in the catalog; keeping cached or bundled rules`);
+      } else {
+        try {
+          const fresh = await fetchRegionRules(summary);
+          checkedOk = true; // server reached, regardless of whether we still apply the result
+          if (cancelled || selectedIdRef.current !== savedId) return;
+          setRules(fresh);
+          rememberSiteUrl(savedId, fresh);
+          await writeCachedRules(savedId, fresh);
+          log(`rules: ${summary.displayName} v${fresh.version} (${fresh.last_updated}) from ${summary.url}`);
+        } catch (error) {
+          console.warn("[region] rules refresh failed; keeping current rules", error);
         }
-        const fresh = await fetchRegionRules(summary);
-        if (cancelled || selectedIdRef.current !== savedId) return;
-        setRules(fresh);
-        rememberSiteUrl(savedId, fresh);
-        await writeCachedRules(savedId, fresh);
-        log(`rules: ${summary.displayName} v${fresh.version} (${fresh.last_updated}) from ${summary.url}`);
-      } catch (error) {
-        console.warn("[region] rules refresh failed; keeping current rules", error);
+      }
+      if (cancelled) return;
+
+      // Record the check, or warn if we've now been unable to reach bingoDB for too long.
+      const now = Date.now();
+      const raw = await getString(StorageKeys.lastRulesCheck);
+      const last = raw != null && raw !== "" ? Number(raw) : NaN;
+      if (checkedOk || Number.isNaN(last)) {
+        // Either we just checked, or this is the first launch with nothing recorded — in the
+        // latter case start the clock now rather than nagging a brand-new (or freshly
+        // offline) install that simply hasn't been online yet.
+        await setString(StorageKeys.lastRulesCheck, String(now)).catch(() => {});
+      } else if (now - last > RULES_CHECK_MAX_AGE_MS) {
+        showError(STALE_RULES_MESSAGE);
       }
     };
 
@@ -210,8 +221,8 @@ export function RegionProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-    // rememberSiteUrl is a stable callback; this still runs once.
-  }, [rememberSiteUrl]);
+    // rememberSiteUrl and showError are stable callbacks; this still runs once.
+  }, [rememberSiteUrl, showError]);
 
   const downloadRegion = useCallback(
     async (summary: RegionSummary, signal?: AbortSignal) => {
@@ -276,67 +287,6 @@ export function RegionProvider({ children }: { children: ReactNode }) {
     [rememberSiteUrl],
   );
 
-  /**
-   * The manual "check for updates" path. Unlike the refresh on mount, this bypasses the HTTP
-   * cache — the whole reason to press it is that something changed in bingoDB in the last few
-   * minutes, which is exactly the window the cache would hide.
-   *
-   * Sequential, not parallel: this is a courtesy-hosted static site, and a burst of requests
-   * per tap is the kind of thing that gets an app rate-limited. It also keeps the failure
-   * report legible — one region failing doesn't cancel the rest.
-   */
-  const refreshDownloadedRules = useCallback(async (): Promise<RefreshReport> => {
-    const activeId = selectedIdRef.current;
-
-    // Index first: it's where the rules URLs come from, and refreshing it means a region
-    // published since launch shows up in the picker on the same tap. Optional, though —
-    // an unreachable index shouldn't stop the downloaded regions from updating.
-    let available = catalogRef.current;
-    try {
-      available = await fetchRegionIndex({ fresh: true });
-      setCatalog(available);
-      setCatalogIsFallback(false);
-      await writeCachedIndex(available);
-    } catch (error) {
-      console.warn("[region] index refresh failed; refreshing rules off the current catalog", error);
-    }
-
-    const targets = available.filter((entry) => downloadedIdsRef.current.has(entry.id));
-    const activeSummary = available.find((entry) => entry.id === activeId);
-    if (!activeSummary) {
-      throw new Error(`No catalog entry for "${activeId}" — nothing to refresh from`);
-    }
-
-    let refreshed = 0;
-    let activeRules: RegionRules | null = null;
-    const failed: string[] = [];
-
-    for (const summary of targets) {
-      try {
-        const fresh = await fetchRegionRules(summary, { fresh: true });
-        await writeCachedRules(summary.id, fresh);
-        rememberSiteUrl(summary.id, fresh);
-        refreshed += 1;
-        if (summary.id === activeId) activeRules = fresh;
-        log(`rules: refreshed ${summary.displayName} v${fresh.version} (${fresh.last_updated})`);
-      } catch (error) {
-        console.warn(`[region] refresh failed for ${summary.id}`, error);
-        failed.push(summary.displayName);
-      }
-    }
-
-    // The active region failing is the only case worth failing the whole call for — it's the
-    // one the user is looking at, and reporting "2 regions updated" would bury it.
-    if (!activeRules) {
-      throw new Error(`Couldn't refresh the active region (${activeSummary.displayName})`);
-    }
-    // Switching regions mid-refresh is only reachable by leaving the screen the button is
-    // on, but applying a stale region's rules over the new one would be the worse bug.
-    if (selectedIdRef.current === activeId) setRules(activeRules);
-
-    return { refreshed, failed, active: activeRules };
-  }, [rememberSiteUrl]);
-
   const value = useMemo<RegionValue>(
     () => ({
       rules,
@@ -348,7 +298,6 @@ export function RegionProvider({ children }: { children: ReactNode }) {
       downloadRegion,
       removeDownload,
       selectRegion,
-      refreshDownloadedRules,
     }),
     [
       rules,
@@ -360,7 +309,6 @@ export function RegionProvider({ children }: { children: ReactNode }) {
       downloadRegion,
       removeDownload,
       selectRegion,
-      refreshDownloadedRules,
     ],
   );
 

@@ -3,7 +3,16 @@
 Running punch list. Check things off as they land; add new items as they come up.
 
 ## Known Bugs
-- [ ] 'notes' feature on the item reporting tool has weird keyboard effect.
+- [x] 'notes' feature on the item reporting tool has weird keyboard effect. Fixed: the
+      `ReportSheet` was owned by both a `KeyboardAvoidingView` (`padding`) and its own
+      Reanimated `translateY` — two owners of the sheet's position that fought on every
+      re-layout while typing. Dropped the KAV. The sheet now stays **anchored** at the bottom
+      (not lifted) so the scrim stays tappable and the grabber swipeable to exit mid-edit; the
+      form `ScrollView` uses iOS `automaticallyAdjustKeyboardInsets` to scroll the focused
+      Notes box above the keyboard.
+- [x] Search: tapping a result while the keyboard was up left the keyboard's QuickType/accessory
+      strip stranded mid-screen for the length of the `item` slide animation. Fixed by
+      `Keyboard.dismiss()` before the push in `search.tsx` `openItem`.
 
 ## Data
 - [x] Rules now come from bingoDB (`https://sandwitchcraft.github.io/bingoDB/`) rather than a
@@ -67,9 +76,12 @@ Running punch list. Check things off as they land; add new items as they come up
       location detection and clear-history are wired so far. The screen scrolls now.
 
 - [ ] The rules refresh on launch goes through the platform HTTP cache, so a bingoDB
-      correction can be up to 10 minutes invisible (GitHub Pages sends `max-age=600`).
-      Settings → **Check for rule updates** bypasses it via a cache-busting query param;
-      decide whether the launch path should too, or whether 10 minutes is fine in production.
+      correction can be up to 10 minutes invisible (GitHub Pages sends `max-age=600`). The
+      manual **Check for rule updates** button (which bypassed the cache) has been removed —
+      the launch refresh is now the only path, and it records the last time it reached bingoDB
+      to drive the 15-day stale-data toast (`RULES_CHECK_MAX_AGE_MS` in `regionStore.tsx`).
+      Decide whether the launch path should force-bypass the cache too, or whether 10 minutes
+      is fine in production.
 
 ## Errors / notifications
 - [x] In-app error banner — `ToastProvider` (`src/ui/toast.tsx`) + `ErrorToast`
@@ -100,10 +112,12 @@ Running punch list. Check things off as they land; add new items as they come up
 - [ ] `refreshDownloadedRules` walks downloaded regions sequentially. Fine at today's catalog
       size; if downloads ever reach dozens, it needs throttling or a staleness check
       (`last_updated`) so a refresh isn't N full fetches every time.
-- [x] Reverse geocoding (Nominatim) — Settings → Location → **Detect** reads the GPS fix,
-      reverse-geocodes it (`src/features/region/location.ts`), matches the result against the catalog
-      most-specific-first, and selects it. The manual picker stays the fallback; every
-      failure mode surfaces as one sentence in the error toast.
+- [x] Reverse geocoding (Nominatim) — the **Detect my location** button at the top of the
+      region picker (`src/app/region.tsx`) reads the GPS fix, reverse-geocodes it
+      (`src/features/region/location.ts`), matches the result against the catalog
+      most-specific-first, and selects it. The manual list right below it stays the fallback;
+      every failure mode surfaces as one sentence in the error toast. (Moved out of Settings so
+      it sits next to the list it feeds.)
 - [ ] `expo-location` was added to `app.json`'s plugins for its permission strings — this needs
       a native rebuild (`scripts/ios-dev-build.sh`) before Detect will work on device.
 - [ ] Detection matches only the leaf name (city, then county, then state). Once province-level

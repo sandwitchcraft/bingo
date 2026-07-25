@@ -22,6 +22,12 @@ export const StorageKeys = {
   /** One entry per region, so switching back to a previous region is instant and offline. */
   regionRules: (regionId: string) => `bingo.region.rules.${regionId}`,
   /**
+   * Epoch-ms of the last time the launch rules-check actually reached bingoDB (index or the
+   * active region's rules). Drives the staleness warning: if no check has landed in 15 days,
+   * the app nudges the user to get online. Written as a string via `setString`.
+   */
+  lastRulesCheck: "bingo.region.lastCheck",
+  /**
    * Anonymous per-device UUID for "report incorrect sort". Generated once, persisted, never
    * tied to a real identity — it only tells "5 devices flagged this" from "1 device, 5 times".
    * Deliberately absent from the training-image flow, which carries no identifier at all.

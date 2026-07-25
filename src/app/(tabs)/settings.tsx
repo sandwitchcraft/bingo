@@ -3,22 +3,22 @@
  * owns the state — this screen holds no preferences of its own.
  *
  * What it offers: theme mode, scan mode, the active region (pushes the full-screen picker
- * in `src/app/region.tsx`), **Detect** location, **Check for rule updates**, clear history,
- * and the dev-only seed/random-sort helpers.
+ * in `src/app/region.tsx`, which is also where location detection now lives), clear history,
+ * and the dev-only seed/random-sort helpers. Rule updates are checked automatically on every
+ * app open (see `regionStore.tsx`), so there is no manual refresh here.
  *
  * Feedback here is deliberately split. Failures with nowhere else to land go to the error
- * toast; successes confirm **inline** (the `detected` / `refreshed` state below) rather than
- * as a banner, because a banner that also carries good news gets dismissed unread.
+ * toast; successes confirm **inline** rather than as a banner, because a banner that also
+ * carries good news gets dismissed unread.
  */
 import { useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { clearScanHistory } from "@/features/history/db";
 import { seedScanHistory } from "@/features/history/devSeed";
-import { detectRegion, locationErrorMessage } from "@/features/region/location";
 import { getRandomItemKey, getRegionName, getRegionPath } from "@/features/region/regionData";
 import { submitReport } from "@/features/reports/reports";
 import { regionSubtitle } from "@/features/region/regionSource";
@@ -45,19 +45,11 @@ const SCAN_MODES: { name: ScanMode; label: string }[] = [
 export default function SettingsScreen() {
   const { theme, name, preference, setPreference } = useTheme();
   const { scanMode, setScanMode } = useScanSettings();
-  const { rules, selectedId, catalog, selectRegion, refreshDownloadedRules } = useRegion();
+  const { rules, selectedId, catalog } = useRegion();
   const { showResult } = useScanResult();
   const { showError } = useToast();
   const router = useRouter();
   const db = useSQLiteContext();
-
-  const [detecting, setDetecting] = useState(false);
-  // Success confirmation for detection, shown inline. The toast is error-only on purpose:
-  // a banner that also carries good news trains people to dismiss it unread.
-  const [detected, setDetected] = useState<string | null>(null);
-
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshed, setRefreshed] = useState<string | null>(null);
 
   // Falls back to the rules' own location_path when the catalog hasn't loaded the
   // matching entry yet — the rules are always present, the index isn't.
@@ -89,71 +81,6 @@ export default function SettingsScreen() {
     // Goes through showResult, so it logs a history row like a real scan does — that's
     // deliberate, it's also how you check the region name being written is the right one.
     showResult(itemKey);
-  };
-
-  /**
-   * GPS → Nominatim → a region in the catalog. A button rather than something that runs on
-   * launch: it costs a permission prompt and a request to a courtesy-rate-limited service,
-   * and the manual picker below already covers the case where it fails.
-   */
-  const detectFromLocation = () => {
-    if (detecting) return;
-    setDetecting(true);
-    setDetected(null);
-
-    const run = async () => {
-      let match;
-      try {
-        match = await detectRegion(catalog);
-      } catch (error) {
-        console.warn("[location] region detection failed", error);
-        showError(locationErrorMessage(error));
-        return;
-      }
-      // Already on it — nothing to fetch, but still confirm, or the button looks inert.
-      if (match.id !== selectedId) {
-        try {
-          await selectRegion(match);
-        } catch (error) {
-          // Separate message from the block above: the location half worked, so telling
-          // the user to check their location settings would send them the wrong way.
-          console.warn("[location] failed to load the detected region", error);
-          showError(`Found ${match.displayName}, but its rules wouldn't download. Check your connection.`);
-          return;
-        }
-      }
-      setDetected(`Region set to ${match.displayName}.`);
-    };
-
-    run().finally(() => setDetecting(false));
-  };
-
-  /**
-   * Pulls every downloaded region's rules from bingoDB, past both caches. Reports the active
-   * region's version and date rather than a bare "done": the rules are data the user can't
-   * see, so "updated" with nothing to compare against is indistinguishable from a no-op.
-   */
-  const refreshFromDatabase = () => {
-    if (refreshing) return;
-    setRefreshing(true);
-    setRefreshed(null);
-    refreshDownloadedRules()
-      .then(({ refreshed: count, failed, active }) => {
-        const stamp = [active.version && `v${active.version}`, active.last_updated]
-          .filter(Boolean)
-          .join(" · ");
-        const scope = count === 1 ? "1 region" : `${count} regions`;
-        setRefreshed(
-          `${scope} up to date${stamp ? ` — ${getRegionName(rules)} ${stamp}` : ""}.` +
-            // Named, not counted: "1 failed" leaves the user guessing which one is stale.
-            (failed.length > 0 ? ` Couldn't update ${failed.join(", ")}.` : ""),
-        );
-      })
-      .catch((error: unknown) => {
-        console.warn("[region] manual rules refresh failed", error);
-        showError("Couldn't reach the rules database. Check your connection and try again.");
-      })
-      .finally(() => setRefreshing(false));
   };
 
   // Dev-only backend smoke check: exercises the Supabase path through the RN runtime
@@ -198,9 +125,10 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.body}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Location</Text>
+        <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Region</Text>
         {/* Page-wide: the whole card is the tap target, unlike the outlined action
-            buttons below, because pressing it navigates rather than acting in place. */}
+            buttons below, because pressing it navigates rather than acting in place. The
+            picker itself now hosts location detection, at the top of its list. */}
         <Pressable
           style={({ pressed }) => [
             styles.card,
@@ -226,74 +154,6 @@ export default function SettingsScreen() {
             <Text style={[styles.chevron, { color: theme.textSubtle }]}>›</Text>
           </View>
         </Pressable>
-
-        <View
-          style={[
-            styles.card,
-            styles.stackedRow,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
-          ]}
-        >
-          <Text style={[styles.rowLabel, { color: theme.textBody }]}>Detect from location</Text>
-          <Pressable
-            style={({ pressed }) => [
-              styles.actionButton,
-              { borderColor: theme.cardBorder },
-              pressed && { backgroundColor: theme.bgInput },
-              detecting && styles.actionButtonBusy,
-            ]}
-            onPress={detectFromLocation}
-            disabled={detecting}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityState={{ busy: detecting }}
-          >
-            {detecting ? (
-              <ActivityIndicator size="small" color={accent[name]} />
-            ) : (
-              <Text style={[styles.rowAction, { color: theme.textMuted }]}>Detect</Text>
-            )}
-          </Pressable>
-        </View>
-        {detected != null && (
-          <Text style={[styles.rowHint, { color: theme.textMuted }, styles.detectedNote]}>
-            {detected}
-          </Text>
-        )}
-
-        <View
-          style={[
-            styles.card,
-            styles.stackedRow,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
-          ]}
-        >
-          <Text style={[styles.rowLabel, { color: theme.textBody }]}>Check for rule updates</Text>
-          <Pressable
-            style={({ pressed }) => [
-              styles.actionButton,
-              { borderColor: theme.cardBorder },
-              pressed && { backgroundColor: theme.bgInput },
-              refreshing && styles.actionButtonBusy,
-            ]}
-            onPress={refreshFromDatabase}
-            disabled={refreshing}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityState={{ busy: refreshing }}
-          >
-            {refreshing ? (
-              <ActivityIndicator size="small" color={accent[name]} />
-            ) : (
-              <Text style={[styles.rowAction, { color: theme.textMuted }]}>Refresh</Text>
-            )}
-          </Pressable>
-        </View>
-        {refreshed != null && (
-          <Text style={[styles.rowHint, { color: theme.textMuted }, styles.detectedNote]}>
-            {refreshed}
-          </Text>
-        )}
 
         <Text style={[styles.sectionLabel, { color: theme.textMuted }, styles.sectionSpacer]}>
           Appearance
@@ -542,9 +402,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
-  // Holds the button's footprint while the spinner replaces the label, so the row doesn't
-  // twitch when detection starts.
-  actionButtonBusy: { minWidth: 62, alignItems: "center", paddingVertical: 5 },
   // Vertical card: a full-width control stacked above its explanatory hint.
   stackCard: {
     borderRadius: radii.card,
