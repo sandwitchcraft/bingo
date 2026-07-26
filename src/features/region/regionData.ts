@@ -18,9 +18,15 @@ export function getRegionName(rules: RegionRules): string {
  * The region's full administrative path, slash-joined: `"canada/ontario/toronto"`. Used as the
  * `region` value sent to the backend (reports / training images) so a row is unambiguous about
  * which municipality it came from — a bare leaf like `"toronto"` collides across provinces.
+ *
+ * A commercial provider is scoped to a shared path (several haulers can serve
+ * `"canada/ontario"`), so its `provider_id` is appended as `"…@republic-services"` — matching
+ * that provider's region `id` — to keep those rows distinct. Municipal providers keep an empty
+ * `provider_id`, so their key stays the bare path and existing backend values are unchanged.
  */
 export function getRegionPath(rules: RegionRules): string {
-  return rules.location_path.join("/");
+  const base = rules.location_path.join("/");
+  return rules.provider_id ? `${base}@${rules.provider_id}` : base;
 }
 
 export function getBinForItem(rules: RegionRules, itemKey: string): BinResult | null {

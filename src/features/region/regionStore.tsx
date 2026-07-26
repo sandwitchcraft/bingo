@@ -16,6 +16,7 @@ import {
   readCachedSiteUrls,
   writeCachedIndex,
   writeCachedRules,
+  type ProviderType,
   type RegionRules,
   type RegionSummary,
 } from "@/features/region/regionSource";
@@ -31,8 +32,8 @@ import {
 
 /**
  * How long the app tolerates being unable to reach bingoDB before it warns the user. The
- * launch check (index + active rules) records the time it last succeeded; past this window
- * with no success, `RegionProvider` raises the stale-data toast.
+ * launch check records the time it last reached the server (the index fetch alone counts);
+ * past this window with no success, `RegionProvider` raises the stale-data toast.
  */
 const RULES_CHECK_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000; // 15 days
 
@@ -42,6 +43,13 @@ const STALE_RULES_MESSAGE =
 type RegionValue = {
   rules: RegionRules;
   selectedId: string;
+  /**
+   * The last region selected in each provider category. `selectedId` always equals the entry
+   * for the active region's category; the other is the user's remembered "home" or "work"
+   * default, which the picker's segment switches to in one tap. `null` until a category has
+   * been used.
+   */
+  lastByCategory: Readonly<Record<ProviderType, string | null>>;
   catalog: RegionSummary[];
   /** True while the catalog is the bundled seed rather than a fetched/cached index. */
   catalogIsFallback: boolean;
@@ -88,6 +96,11 @@ export function RegionProvider({ children }: { children: ReactNode }) {
   const { showError } = useToast();
   const [rules, setRules] = useState<RegionRules>(BUNDLED_RULES);
   const [selectedId, setSelectedId] = useState<string>(BUNDLED_REGION_ID);
+  // The bundled region is municipal, so it seeds the residential slot; commercial starts empty.
+  const [lastByCategory, setLastByCategory] = useState<Record<ProviderType, string | null>>(() => ({
+    municipal: BUNDLED_REGION_ID,
+    commercial: null,
+  }));
   const [catalog, setCatalog] = useState<RegionSummary[]>(BUNDLED_CATALOG);
   const [catalogIsFallback, setCatalogIsFallback] = useState(true);
   // Seeded with the bundled region rather than starting empty: it's downloaded by virtue of
@@ -120,6 +133,19 @@ export function RegionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  /**
+   * Records a region as its category's remembered default (the "home"/"work" the picker's
+   * segment switches to). Best-effort persistence — the map is already live in memory.
+   */
+  const rememberCategoryDefault = useCallback((regionId: string, category: ProviderType) => {
+    setLastByCategory((current) =>
+      current[category] === regionId ? current : { ...current, [category]: regionId },
+    );
+    setString(StorageKeys.lastRegionByCategory(category), regionId).catch((error: unknown) => {
+      console.warn("[region] failed to persist category default", error);
+    });
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -137,6 +163,22 @@ export function RegionProvider({ children }: { children: ReactNode }) {
       const cachedRules = await readCachedRules(savedId);
       if (cancelled) return;
       if (cachedRules) setRules(cachedRules);
+
+      // Restore the remembered home/work defaults, then pin the active region as its own
+      // category's default — it IS the current one. Category comes from the cached rules; the
+      // bundled region has no cache yet but is municipal.
+      const activeCategory: ProviderType = cachedRules?.provider_type ?? "municipal";
+      const [storedMunicipal, storedCommercial] = await Promise.all([
+        getString(StorageKeys.lastRegionByCategory("municipal")),
+        getString(StorageKeys.lastRegionByCategory("commercial")),
+      ]);
+      if (cancelled) return;
+      const restored: Record<ProviderType, string | null> = {
+        municipal: storedMunicipal,
+        commercial: storedCommercial,
+      };
+      restored[activeCategory] = savedId;
+      setLastByCategory(restored);
 
       // Which regions are on disk. Unioned with the bundled id, never replaced by the scan:
       // Toronto has no cache entry until it's been refreshed once, but it's always usable.
@@ -163,11 +205,13 @@ export function RegionProvider({ children }: { children: ReactNode }) {
       }
 
       // Refresh from the network. This is the automatic "check for updates" that runs on
-      // every app open — there is no manual button. Both halves are independently optional:
-      // an unreachable index.json shouldn't stop the selected region's rules from updating.
-      // `checkedOk` records whether either half actually reached bingoDB, which is what the
-      // staleness warning below keys off — reaching the server counts even if nothing changed.
+      // every app open — there is no manual button. The index is the check: its per-entry
+      // `version` is compared against the cached rules, so an unchanged region skips the
+      // rules fetch entirely (one request instead of two on the common no-change launch).
+      // `checkedOk` records whether we actually reached bingoDB, which is what the staleness
+      // warning below keys off — reaching the index counts even if nothing changed.
       let checkedOk = false;
+      let indexOk = false;
       try {
         available = await fetchRegionIndex();
         if (cancelled) return;
@@ -175,6 +219,7 @@ export function RegionProvider({ children }: { children: ReactNode }) {
         setCatalogIsFallback(false);
         await writeCachedIndex(available);
         checkedOk = true;
+        indexOk = true;
         log(`index: ${available.length} regions fetched from ${BASE_URL}index.json`);
       } catch (error) {
         console.warn("[region] index refresh failed; using cached or bundled catalog", error);
@@ -185,6 +230,17 @@ export function RegionProvider({ children }: { children: ReactNode }) {
       if (!summary) {
         // No index entry means no URL to fetch — the cached (or bundled) rules stand.
         log(`rules: "${savedId}" not in the catalog; keeping cached or bundled rules`);
+      } else if (
+        // Trust the version only from a freshly fetched index; a stale cached index could
+        // otherwise talk us out of a rules fetch that would have reached the server. When the
+        // index says our cached rules are current, skip the fetch (but we already reached the
+        // server via the index, so `checkedOk` stands).
+        indexOk &&
+        cachedRules &&
+        summary.version &&
+        summary.version === cachedRules.version
+      ) {
+        log(`rules: ${summary.displayName} unchanged at v${summary.version} per index; skipped fetch`);
       } else {
         try {
           const fresh = await fetchRegionRules(summary);
@@ -275,6 +331,8 @@ export function RegionProvider({ children }: { children: ReactNode }) {
         setDownloadedIds((current) => new Set(current).add(summary.id));
       }
       rememberSiteUrl(summary.id, next);
+      // Coerce, so rules cached before `provider_type` existed don't record an "undefined" slot.
+      rememberCategoryDefault(summary.id, next.provider_type === "commercial" ? "commercial" : "municipal");
       log(`selected ${summary.displayName} — ${Object.keys(next.items).length} items`);
       setSelectedId(summary.id);
       selectedIdRef.current = summary.id;
@@ -284,13 +342,14 @@ export function RegionProvider({ children }: { children: ReactNode }) {
         console.warn("[region] failed to persist region selection", error);
       });
     },
-    [rememberSiteUrl],
+    [rememberSiteUrl, rememberCategoryDefault],
   );
 
   const value = useMemo<RegionValue>(
     () => ({
       rules,
       selectedId,
+      lastByCategory,
       catalog,
       catalogIsFallback,
       downloadedIds,
@@ -302,6 +361,7 @@ export function RegionProvider({ children }: { children: ReactNode }) {
     [
       rules,
       selectedId,
+      lastByCategory,
       catalog,
       catalogIsFallback,
       downloadedIds,

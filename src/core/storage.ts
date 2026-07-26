@@ -12,6 +12,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 /** Namespaced so a future storage inspector can tell our keys from a library's. */
 export const StorageKeys = {
   selectedRegionId: "bingo.region.selectedId",
+  /**
+   * The last region picked in each provider category, so the picker's Residential/Commercial
+   * segment can switch straight to a remembered "home" and "work" default in one tap. The
+   * active region (`selectedRegionId`) is always one of these two; the other is whatever the
+   * user last used in the opposite category.
+   */
+  lastRegionByCategory: (category: string) => `bingo.region.lastByCategory.${category}`,
+  /** Which provider category the picker's segment last showed, so it reopens where it was. */
+  regionPickerCategory: "bingo.region.pickerCategory",
   regionIndex: "bingo.region.index",
   /**
    * The prefix and the key builder are defined together because the set of downloaded

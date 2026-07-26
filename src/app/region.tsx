@@ -15,6 +15,7 @@ import ReanimatedSwipeable, {
 } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { getString, setString, StorageKeys } from "@/core/storage";
 import {
   CheckIcon,
   CloudDownloadIcon,
@@ -22,7 +23,12 @@ import {
   StopCircleIcon,
 } from "@/features/region/RegionIcons";
 import { detectRegion, locationErrorMessage } from "@/features/region/location";
-import { BUNDLED_REGION_ID, regionSubtitle, type RegionSummary } from "@/features/region/regionSource";
+import {
+  BUNDLED_REGION_ID,
+  regionSubtitle,
+  type ProviderType,
+  type RegionSummary,
+} from "@/features/region/regionSource";
 import { useRegion } from "@/features/region/regionStore";
 import { accent, colors, FONT, radii, useTheme } from "@/ui/theme";
 import { useToast } from "@/ui/toast";
@@ -59,13 +65,78 @@ function RowGap() {
   return <View style={styles.rowGap} />;
 }
 
+/**
+ * True when `prefix` is an ordered prefix of `full` — i.e. a provider's geographic scope
+ * covers the reference location. `["canada","ontario"]` covers `["canada","ontario","halton"]`.
+ * The same ancestor-containment idea `matchRegion` uses, specialized to an ordered prefix
+ * because a commercial `path` is a scope, not a place to name-match.
+ */
+function isPrefixPath(prefix: string[], full: string[]): boolean {
+  return prefix.length <= full.length && prefix.every((seg, i) => seg === full[i]);
+}
+
+/** The two provider categories, in segment order. `value` is the wire `ProviderType`. */
+const CATEGORY_SEGMENTS: { value: ProviderType; label: string }[] = [
+  { value: "municipal", label: "Residential" },
+  { value: "commercial", label: "Commercial" },
+];
+
+/**
+ * Coerce a possibly-missing category to a valid one, defaulting to residential. Rules cached
+ * before `provider_type` existed read back `undefined`, which would leave the segment matching
+ * neither option — this keeps a category always selected.
+ */
+function normalizeCategory(value: unknown): ProviderType {
+  return value === "commercial" ? "commercial" : "municipal";
+}
+
+/**
+ * A SwiftUI-style segmented control: a pill of options where the selected one sits on a
+ * raised card. Top-right of the picker header, it flips the whole list between a user's
+ * residential ("home") and commercial ("work") providers.
+ */
+function SegmentedControl({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: ProviderType; label: string }[];
+  value: ProviderType;
+  onChange: (value: ProviderType) => void;
+}) {
+  const { theme, name } = useTheme();
+  return (
+    <View style={[styles.segment, { backgroundColor: theme.bgInput }]}>
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <Pressable
+            key={opt.value}
+            onPress={() => onChange(opt.value)}
+            style={[styles.segmentItem, active && { backgroundColor: theme.card }]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={`Show ${opt.label.toLowerCase()} providers`}
+          >
+            <Text style={[styles.segmentLabel, { color: active ? accent[name] : theme.textSubtle }]}>
+              {opt.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function RegionScreen() {
   const { theme, name } = useTheme();
   const router = useRouter();
   const {
+    rules,
     catalog,
     catalogIsFallback,
     selectedId,
+    lastByCategory,
     downloadedIds,
     siteUrls,
     downloadRegion,
@@ -75,6 +146,31 @@ export default function RegionScreen() {
   const { showError } = useToast();
 
   const [query, setQuery] = useState("");
+  // Which provider category the list is showing. Seeds from the active region's category
+  // (coerced, so a legacy cache without `provider_type` still lands on Residential); the saved
+  // preference is restored just below, and every change persists it.
+  const [viewCategory, setViewCategoryState] = useState<ProviderType>(() =>
+    normalizeCategory(rules.provider_type),
+  );
+  // Set true once the user picks a segment (or detect forces one), so a slow restore read
+  // can't clobber a choice they already made.
+  const categoryTouched = useRef(false);
+  const setViewCategory = (category: ProviderType) => {
+    categoryTouched.current = true;
+    setViewCategoryState(category);
+    setString(StorageKeys.regionPickerCategory, category).catch(() => {});
+  };
+
+  // Reopen on the category last shown. Falls back to the seed above (active region, then
+  // Residential) when nothing is stored or the read loses the race to a user tap.
+  useEffect(() => {
+    getString(StorageKeys.regionPickerCategory)
+      .then((saved) => {
+        if (categoryTouched.current || (saved !== "municipal" && saved !== "commercial")) return;
+        setViewCategoryState(saved);
+      })
+      .catch(() => {});
+  }, []);
   // Keyed by region id so several can download at once — saving a few before a trip is the
   // case this whole feature exists for.
   const [downloads, setDownloads] = useState<Record<string, DownloadState>>({});
@@ -101,22 +197,60 @@ export default function RegionScreen() {
 
   const sections = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    // Parents and slugs are in the haystack too, so "ontario" or "canada" finds every
-    // region under them even though neither is a region you can select.
+    // Parents, slugs and the provider name are in the haystack too, so "ontario"/"canada"
+    // finds every region under them and "republic" finds the commercial provider by name.
     const matches = (region: RegionSummary) =>
       needle === "" ||
-      [region.displayName, ...region.parents, ...region.path]
+      [region.displayName, region.providerName ?? "", ...region.parents, ...region.path]
         .join(" ")
         .toLowerCase()
         .includes(needle);
 
-    const found = catalog.filter(matches);
+    // Only the selected category is shown — the segment is a mode switch, not just a filter.
+    const inCategory = catalog.filter((r) => r.providerType === viewCategory && matches(r));
+    const downloaded = inCategory.filter((r) => downloadedIds.has(r.id));
+    const notDownloaded = inCategory.filter((r) => !downloadedIds.has(r.id));
+
+    if (viewCategory === "commercial") {
+      // The scope to rank commercial haulers by: the active region's geographic path (what
+      // "detect" set, too), falling back to the loaded rules' path. Providers whose scope
+      // covers you come first; the rest still show, since a category shows everything in it.
+      const referencePath =
+        catalog.find((entry) => entry.id === selectedId)?.path ?? rules.location_path;
+      const serving = notDownloaded.filter((r) => isPrefixPath(r.path, referencePath));
+      const others = notDownloaded.filter((r) => !isPrefixPath(r.path, referencePath));
+      return [
+        { key: "downloaded", title: "Downloaded", data: downloaded },
+        { key: "serves-area", title: "Serves your area", data: serving },
+        { key: "other", title: "Other providers", data: others },
+        // A section with no rows would render as a header floating over nothing.
+      ].filter((section) => section.data.length > 0);
+    }
+
     return [
-      { key: "downloaded", title: "Downloaded", data: found.filter((r) => downloadedIds.has(r.id)) },
-      { key: "available", title: "Available", data: found.filter((r) => !downloadedIds.has(r.id)) },
-      // A section with no rows would render as a header floating over nothing.
+      { key: "downloaded", title: "Downloaded", data: downloaded },
+      { key: "available", title: "Available", data: notDownloaded },
     ].filter((section) => section.data.length > 0);
-  }, [catalog, downloadedIds, query]);
+  }, [catalog, downloadedIds, query, selectedId, rules, viewCategory]);
+
+  // Flip the Residential/Commercial segment. If that category has a remembered default that
+  // isn't already active, switch straight to it (the one-tap home↔work switch); otherwise just
+  // show the category's list so the user can pick one, which then becomes its default.
+  const switchCategory = (category: ProviderType) => {
+    if (category === viewCategory) return;
+    setViewCategory(category);
+    const savedId = lastByCategory[category];
+    if (!savedId || savedId === selectedId || pendingSelectId) return;
+    const summary = catalog.find((entry) => entry.id === savedId);
+    if (!summary) return; // remembered region no longer in the catalog — just show the list
+    setPendingSelectId(summary.id);
+    selectRegion(summary)
+      .catch((error: unknown) => {
+        console.warn("[region] failed to switch category default", error);
+        showError(`Couldn't switch to ${summary.displayName}. Its saved rules may be unavailable.`);
+      })
+      .finally(() => setPendingSelectId(null));
+  };
 
   const endDownload = (regionId: string) => {
     const timer = timers.current.get(regionId);
@@ -205,6 +339,8 @@ export default function RegionScreen() {
         showError(locationErrorMessage(error));
         return;
       }
+      // Detection only ever resolves a residential region, so show that category.
+      setViewCategory("municipal");
       if (match.id === selectedId) return; // already sorting against it — nothing to switch
       try {
         await selectRegion(match);
@@ -265,6 +401,8 @@ export default function RegionScreen() {
             {/* ACTIVE carries the selection now that the check means "downloaded". */}
             {isSelected && <Text style={{ color: accent[name] }}>ACTIVE · </Text>}
             {isBundled && "BUILT IN · "}
+            {/* A private hauler, not the place's municipal collection — same eyebrow as BUILT IN. */}
+            {item.providerType === "commercial" && "COMMERCIAL · "}
             {subtitle}
           </Text>
         </View>
@@ -340,9 +478,12 @@ export default function RegionScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={["top"]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button">
-          <Text style={[styles.back, { color: theme.textMuted }]}>‹ Settings</Text>
-        </Pressable>
+        <View style={styles.headerTopRow}>
+          <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button">
+            <Text style={[styles.back, { color: theme.textMuted }]}>‹ Settings</Text>
+          </Pressable>
+          <SegmentedControl options={CATEGORY_SEGMENTS} value={viewCategory} onChange={switchCategory} />
+        </View>
         <Text style={[styles.heading, { color: theme.text }]}>Region</Text>
       </View>
 
@@ -360,27 +501,31 @@ export default function RegionScreen() {
         />
       </View>
 
-      {/* Locked above the list — always reachable, never scrolls away with the results. */}
-      <View style={styles.detectWrap}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.detectButton,
-            { borderColor: accent[name], backgroundColor: theme.card },
-            pressed && { backgroundColor: theme.bgInput },
-          ]}
-          onPress={detect}
-          disabled={detecting}
-          accessibilityRole="button"
-          accessibilityLabel="Detect my region from location"
-          accessibilityState={{ busy: detecting }}
-        >
-          {detecting ? (
-            <ActivityIndicator size="small" color={accent[name]} />
-          ) : (
-            <Text style={[styles.detectText, { color: accent[name] }]}>Detect my location</Text>
-          )}
-        </Pressable>
-      </View>
+      {/* Locked above the list — always reachable, never scrolls away with the results. Only
+          on Residential: detection resolves a place to its municipal collection, never to a
+          commercial hauler, so the button has nothing to land on under the Commercial segment. */}
+      {viewCategory === "municipal" && (
+        <View style={styles.detectWrap}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.detectButton,
+              { borderColor: accent[name], backgroundColor: theme.card },
+              pressed && { backgroundColor: theme.bgInput },
+            ]}
+            onPress={detect}
+            disabled={detecting}
+            accessibilityRole="button"
+            accessibilityLabel="Detect my region from location"
+            accessibilityState={{ busy: detecting }}
+          >
+            {detecting ? (
+              <ActivityIndicator size="small" color={accent[name]} />
+            ) : (
+              <Text style={[styles.detectText, { color: accent[name] }]}>Detect my location</Text>
+            )}
+          </Pressable>
+        </View>
+      )}
 
       <SectionList
         sections={sections}
@@ -396,7 +541,11 @@ export default function RegionScreen() {
         keyboardDismissMode="on-drag"
         ListEmptyComponent={
           <Text style={[styles.empty, { color: theme.textMuted }]}>
-            No regions match “{query.trim()}”.
+            {query.trim()
+              ? `No regions match “${query.trim()}”.`
+              : viewCategory === "commercial"
+                ? "No commercial providers are listed yet. Reconnect to check for the latest."
+                : "No residential regions are available."}
           </Text>
         }
         ListFooterComponent={
@@ -418,7 +567,17 @@ export default function RegionScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 12 },
+  headerTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   back: { fontFamily: FONT.utility, fontSize: 12, letterSpacing: 0.4 },
+  // SwiftUI-style segmented control: a track holding pill segments, selected one raised.
+  segment: { flexDirection: "row", borderRadius: radii.button, padding: 3 },
+  segmentItem: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radii.button - 3 },
+  segmentLabel: {
+    fontFamily: FONT.utilityStrong,
+    fontSize: 11,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
   heading: { fontFamily: FONT.heading, fontSize: 26, letterSpacing: -0.4, marginTop: 6 },
   searchWrap: { paddingHorizontal: 24, paddingBottom: 12 },
   detectWrap: { paddingHorizontal: 24, paddingBottom: 4 },

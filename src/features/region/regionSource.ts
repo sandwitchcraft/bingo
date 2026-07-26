@@ -18,16 +18,42 @@ export const BASE_URL = "https://sandwitchcraft.github.io/bingoDB/";
 
 const INDEX_PATH = "index.json";
 
+/**
+ * Which kind of waste provider a region entry describes. Most regions are `municipal`
+ * (the residential collection a place's own authority runs) — that's the default whenever
+ * the field is absent, which is what keeps older index entries valid. A `commercial`
+ * provider is a private hauler that operates across a broader scope with its own rules;
+ * these are chosen manually and are deliberately excluded from location auto-detect.
+ */
+export type ProviderType = "municipal" | "commercial";
+
 /** One entry in the index — enough to render a picker row without fetching the rules. */
 export type RegionSummary = {
-  /** Path-shaped and stable ("canada/ontario/toronto"); doubles as the cache key. */
+  /**
+   * Stable identity, doubles as the cache key. Municipal entries are path-shaped
+   * ("canada/ontario/toronto"); a commercial provider carries a `@<provider_id>` suffix on
+   * its geographic scope ("canada/ontario@republic-services"), which is why `id` is not
+   * assumed equal to `path.join("/")`.
+   */
   id: string;
   displayName: string;
   level: string;
-  /** Folder slugs, root-first. */
+  /**
+   * The provider's geographic *scope*, root-first folder slugs. For a commercial provider
+   * this is the area it covers (e.g. `["canada","ontario"]`), not a place with that id.
+   */
   path: string[];
   /** Readable ancestor labels ("Canada", "Ontario"), title-cased from `path` if absent. */
   parents: string[];
+  /** `municipal` unless the entry says otherwise. */
+  providerType: ProviderType;
+  /** The slug after `@` in a commercial `id`; absent for municipal entries. */
+  providerId?: string;
+  /** Provider label, so a commercial row can be named without downloading its rules. */
+  providerName?: string;
+  /** Rules version/date from the index, used to skip an unchanged region's rules fetch. */
+  version?: string;
+  lastUpdated?: string;
   /** Absolute, already joined against BASE_URL. */
   url: string;
 };
@@ -43,6 +69,13 @@ export type RegionItem = {
 export type RegionRules = {
   district_name: string;
   provider_name: string;
+  /**
+   * Empty for a municipal provider (deliberately — it keeps `getRegionPath`'s backend key a
+   * bare path); a slug like `"republic-services"` for a commercial one, which is what
+   * disambiguates two providers that share a `location_path`.
+   */
+  provider_id: string;
+  provider_type: ProviderType;
   site_url: string;
   last_updated: string;
   version: string;
@@ -115,6 +148,18 @@ export function parseRegionIndex(raw: unknown): RegionSummary[] {
       path,
       // `parents` is optional in the contract, so derive it when the generator omits it.
       parents: parents.length > 0 ? parents : path.slice(0, -1).map(titleCase),
+      // Anything but an explicit "commercial" is municipal — the safe default, since
+      // municipal is the only kind location auto-detect will match.
+      providerType: entry.provider_type === "commercial" ? "commercial" : "municipal",
+      providerId:
+        typeof entry.provider_id === "string" && entry.provider_id ? entry.provider_id : undefined,
+      providerName:
+        typeof entry.provider_name === "string" && entry.provider_name
+          ? entry.provider_name
+          : undefined,
+      version: typeof entry.version === "string" && entry.version ? entry.version : undefined,
+      lastUpdated:
+        typeof entry.last_updated === "string" && entry.last_updated ? entry.last_updated : undefined,
       url: resolveUrl(url),
     });
   }
@@ -145,6 +190,8 @@ export function parseRegionRules(raw: unknown): RegionRules {
   return {
     district_name: typeof raw.district_name === "string" ? raw.district_name : "",
     provider_name: typeof raw.provider_name === "string" ? raw.provider_name : "",
+    provider_id: typeof raw.provider_id === "string" ? raw.provider_id : "",
+    provider_type: raw.provider_type === "commercial" ? "commercial" : "municipal",
     site_url: typeof raw.site_url === "string" ? raw.site_url : "",
     last_updated: typeof raw.last_updated === "string" ? raw.last_updated : "",
     version: typeof raw.version === "string" ? raw.version : "",

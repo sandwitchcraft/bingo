@@ -170,6 +170,11 @@ function regionAliases(region: RegionSummary): string[] {
  * the leaf name only counts if every one of the entry's parents ("Canada", "Ontario") also
  * appears somewhere in the same address. It's a containment test, not a hierarchy walk —
  * the catalog is flat (see the "most specific wins" TODO), so there's no chain to walk yet.
+ *
+ * Only municipal entries are eligible: auto-detect resolves a place to its residential
+ * collection, never to a commercial hauler (those are broad-scoped and picked by hand).
+ * Skipping them also keeps the flat "first hit" rule from grabbing a province-wide
+ * commercial scope over the municipality the user is actually standing in.
  */
 export function matchRegion(catalog: RegionSummary[], place: PlaceLabels): RegionSummary | null {
   const addressNames = new Set(place.all.map(normalizePlace));
@@ -178,6 +183,7 @@ export function matchRegion(catalog: RegionSummary[], place: PlaceLabels): Regio
     const needle = normalizePlace(candidate);
     if (needle === "") continue;
     for (const region of catalog) {
+      if (region.providerType !== "municipal") continue;
       if (!regionAliases(region).includes(needle)) continue;
       const ancestorsPresent = region.parents.every((parent) =>
         addressNames.has(normalizePlace(parent)),

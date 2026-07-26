@@ -122,6 +122,7 @@ Running punch list. Check things off as they land; add new items as they come up
       a native rebuild (`scripts/ios-dev-build.sh`) before Detect will work on device.
 - [ ] Detection matches only the leaf name (city, then county, then state). Once province-level
       files exist it should fall back down the chain rather than giving up at "no-match".
+- [ ] Add a favourite/heart feature for easy access to well-known regions.
 
 ## Dev environment
 - [x] Expo Go doesn't support this project's SDK version, so local device testing needs a real

@@ -55,16 +55,14 @@ export function StopCircleIcon(p: IconProps) {
 }
 
 /**
- * Opens the region's own waste page in the browser. Deliberately the conventional
- * arrow-out-of-a-box rather than a chain link: it has to read as "this leaves the app",
- * which is the part worth warning about, not "this is a URL".
+ * Opens the region's own waste page in the browser. A chain-link (🔗): two interlocking
+ * rounded links on the 24px grid, reading straightforwardly as "this is a URL to follow".
  */
 export function ExternalLinkIcon(p: IconProps) {
   return (
     <Glyph {...p}>
-      <Path d="M14 4.5h5.5V10" />
-      <Path d="M19.5 4.5 12 12" />
-      <Path d="M18 14.5v4a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6h4" />
+      <Path d="M10 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1.5 1.5" />
+      <Path d="M14 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5L11.5 17" />
     </Glyph>
   );
 }
