@@ -107,7 +107,7 @@ Running punch list. Check things off as they land; add new items as they come up
 - [x] Manual region picker — Settings → Region opens `src/app/region.tsx` (full-screen, search,
       slide-in from the right), persists the choice, works offline off the cache
 - [x] Per-region downloads — cloud icon downloads without selecting, stop button appears only
-      if the transfer passes 1s, swipe-to-delete removes, `DOWNLOADED` section sorts first.
+      if the transfer passes 1s, swipe-to-delete removes, downloaded regions sort above the rest.
       Selecting a downloaded region is now cache-only, so switching regions works offline.
 - [ ] `refreshDownloadedRules` walks downloaded regions sequentially. Fine at today's catalog
       size; if downloads ever reach dozens, it needs throttling or a staleness check
@@ -122,7 +122,14 @@ Running punch list. Check things off as they land; add new items as they come up
       a native rebuild (`scripts/ios-dev-build.sh`) before Detect will work on device.
 - [ ] Detection matches only the leaf name (city, then county, then state). Once province-level
       files exist it should fall back down the chain rather than giving up at "no-match".
-- [ ] Add a favourite/heart feature for easy access to well-known regions.
+- [x] Favourites — the heart on each picker row floats it toward the top. Ordering only:
+      independent of download and selection, so an un-downloaded region can be hearted and
+      stays near the top. Persisted as an id list (`StorageKeys.favouriteRegionIds`), never
+      pruned against the catalog so an offline launch's short list can't drop them.
+- [x] Flat, headerless region list — one `FlatList` ranked by `tierOf`: active → favourites
+      (downloaded first) → downloaded → the rest (commercial "serves your area" first).
+      Replaced the Downloaded/Available/Favourites section headers, which restated what each
+      row already shows.
 
 ## Dev environment
 - [x] Expo Go doesn't support this project's SDK version, so local device testing needs a real

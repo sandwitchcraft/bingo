@@ -21,6 +21,13 @@ export const StorageKeys = {
   lastRegionByCategory: (category: string) => `bingo.region.lastByCategory.${category}`,
   /** Which provider category the picker's segment last showed, so it reopens where it was. */
   regionPickerCategory: "bingo.region.pickerCategory",
+  /**
+   * Region ids the user has hearted, as a JSON array. Purely an ordering preference for the
+   * picker — a favourite is independent of whether the region is downloaded or selected, and
+   * an id that has since left the catalog is kept rather than pruned (an offline launch shows
+   * the short bundled catalog, and pruning against it would silently drop real favourites).
+   */
+  favouriteRegionIds: "bingo.region.favourites",
   regionIndex: "bingo.region.index",
   /**
    * The prefix and the key builder are defined together because the set of downloaded

@@ -8,21 +8,29 @@ import Svg, { Circle, Path, Rect } from "react-native-svg";
  * The three states the cloud/stop/check trio expresses are download-state ONLY: cloud (not
  * downloaded) → stop (downloading, tap to cancel) → check (downloaded). Which region is
  * *selected* is carried by the row's accent border and its ACTIVE label, not by an icon,
- * because the check now means "on disk" rather than "in use". `ExternalLinkIcon` sits beside
- * that slot and is a separate axis: where the rules came from, not what state they're in.
+ * because the check now means "on disk" rather than "in use". `ExternalLinkIcon` and
+ * `HeartIcon` sit beside that slot and are separate axes: where the rules came from, and
+ * whether the user has pinned the row — neither is a download state.
  */
 
 type IconProps = { size: number; color: string };
 
 const STROKE = 1.8;
 
-function Glyph({ size, color, children }: IconProps & { children: React.ReactNode }) {
+function Glyph({
+  size,
+  color,
+  filled,
+  children,
+}: IconProps & { filled?: boolean; children: React.ReactNode }) {
   return (
     <Svg
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      fill="none"
+      // Outline is the house style; `filled` exists for the one glyph that carries an on/off
+      // state in its own shape rather than in a neighbouring label (the heart).
+      fill={filled ? color : "none"}
       stroke={color}
       strokeWidth={STROKE}
       strokeLinecap="round"
@@ -63,6 +71,20 @@ export function ExternalLinkIcon(p: IconProps) {
     <Glyph {...p}>
       <Path d="M10 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1.5 1.5" />
       <Path d="M14 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5L11.5 17" />
+    </Glyph>
+  );
+}
+
+/**
+ * Favourite — pins a region to the top of the picker. A third axis alongside the two above:
+ * not where the rules came from (link), not what state they're in (cloud/stop/check), just
+ * where the user wants this row to sit. Hollow when off, filled when on, because it's the
+ * only glyph here whose own shape has to carry an on/off state.
+ */
+export function HeartIcon(p: IconProps & { filled?: boolean }) {
+  return (
+    <Glyph {...p}>
+      <Path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
     </Glyph>
   );
 }

@@ -2,9 +2,9 @@ import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   Linking,
   Pressable,
-  SectionList,
   StyleSheet,
   Text,
   TextInput,
@@ -20,6 +20,7 @@ import {
   CheckIcon,
   CloudDownloadIcon,
   ExternalLinkIcon,
+  HeartIcon,
   StopCircleIcon,
 } from "@/features/region/RegionIcons";
 import { detectRegion, locationErrorMessage } from "@/features/region/location";
@@ -38,12 +39,16 @@ import { useToast } from "@/ui/toast";
  * stack's `slide_from_right` (configured in `_layout.tsx`) rather than a hand-rolled
  * transform, so the interactive back-swipe comes with it.
  *
- * Two actions per row, which is the thing to keep straight when reading this: the **row body
+ * Three actions per row, which is the thing to keep straight when reading this: the **row body
  * downloads-then-selects** (whatever it takes to start sorting against this region — a fetch
- * if the rules aren't on disk yet, then the switch), and the **cloud icon downloads only**
+ * if the rules aren't on disk yet, then the switch), the **cloud icon downloads only**
  * (stores the rules; changes nothing about what you're sorting against right now — the
- * saving-ahead-of-a-trip case). Once a region is downloaded, `selectRegion` reads it from the
- * cache, so switching back to it later works with no network at all.
+ * saving-ahead-of-a-trip case), and the **heart favourites** (pure ordering — floats the row
+ * toward the top and touches neither the rules nor the selection). Once a region is
+ * downloaded, `selectRegion` reads it from the cache, so switching back to it later works
+ * with no network at all.
+ *
+ * The list itself is flat and unlabelled — see `tierOf` for the order.
  */
 
 /**
@@ -139,6 +144,8 @@ export default function RegionScreen() {
     lastByCategory,
     downloadedIds,
     siteUrls,
+    favouriteIds,
+    toggleFavourite,
     downloadRegion,
     removeDownload,
     selectRegion,
@@ -195,7 +202,7 @@ export default function RegionScreen() {
     };
   }, []);
 
-  const sections = useMemo(() => {
+  const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
     // Parents, slugs and the provider name are in the haystack too, so "ontario"/"canada"
     // finds every region under them and "republic" finds the commercial provider by name.
@@ -208,30 +215,34 @@ export default function RegionScreen() {
 
     // Only the selected category is shown — the segment is a mode switch, not just a filter.
     const inCategory = catalog.filter((r) => r.providerType === viewCategory && matches(r));
-    const downloaded = inCategory.filter((r) => downloadedIds.has(r.id));
-    const notDownloaded = inCategory.filter((r) => !downloadedIds.has(r.id));
 
-    if (viewCategory === "commercial") {
-      // The scope to rank commercial haulers by: the active region's geographic path (what
-      // "detect" set, too), falling back to the loaded rules' path. Providers whose scope
-      // covers you come first; the rest still show, since a category shows everything in it.
-      const referencePath =
-        catalog.find((entry) => entry.id === selectedId)?.path ?? rules.location_path;
-      const serving = notDownloaded.filter((r) => isPrefixPath(r.path, referencePath));
-      const others = notDownloaded.filter((r) => !isPrefixPath(r.path, referencePath));
-      return [
-        { key: "downloaded", title: "Downloaded", data: downloaded },
-        { key: "serves-area", title: "Serves your area", data: serving },
-        { key: "other", title: "Other providers", data: others },
-        // A section with no rows would render as a header floating over nothing.
-      ].filter((section) => section.data.length > 0);
-    }
+    // The scope commercial haulers are ranked against: the active region's geographic path
+    // (what "detect" set, too), falling back to the loaded rules' path. It only breaks the
+    // tie inside the last tier — a category still shows everything in it.
+    const referencePath =
+      catalog.find((entry) => entry.id === selectedId)?.path ?? rules.location_path;
+    const servesArea = (region: RegionSummary) =>
+      viewCategory === "commercial" && isPrefixPath(region.path, referencePath);
 
-    return [
-      { key: "downloaded", title: "Downloaded", data: downloaded },
-      { key: "available", title: "Available", data: notDownloaded },
-    ].filter((section) => section.data.length > 0);
-  }, [catalog, downloadedIds, query, selectedId, rules, viewCategory]);
+    // One flat list, ordered by how likely you are to want the row — no headers, because the
+    // row already says what it is (ACTIVE marker, filled heart, check) and a header per tier
+    // would be four labels restating that. Tiers, most wanted first.
+    const TIERS = 6;
+    const tierOf = (region: RegionSummary): number => {
+      if (region.id === selectedId) return 0; // the region in use, always at the top
+      const favourite = favouriteIds.has(region.id);
+      const downloaded = downloadedIds.has(region.id);
+      if (favourite) return downloaded ? 1 : 2; // hearted, usable offline first
+      if (downloaded) return 3;
+      return servesArea(region) ? 4 : 5;
+    };
+
+    // Bucketed rather than sorted by `tierOf`: this keeps catalog order inside each tier
+    // without depending on the engine's sort being stable.
+    const buckets: RegionSummary[][] = Array.from({ length: TIERS }, () => []);
+    for (const region of inCategory) buckets[tierOf(region)].push(region);
+    return buckets.flat();
+  }, [catalog, downloadedIds, favouriteIds, query, selectedId, rules, viewCategory]);
 
   // Flip the Residential/Commercial segment. If that category has a remembered default that
   // isn't already active, switch straight to it (the one-tap home↔work switch); otherwise just
@@ -376,6 +387,7 @@ export default function RegionScreen() {
     const isDownloaded = downloadedIds.has(item.id);
     const download = downloads[item.id];
     const isSelecting = item.id === pendingSelectId;
+    const isFavourite = favouriteIds.has(item.id);
     const subtitle = regionSubtitle(item);
     // Only downloaded regions have one: site_url arrives with the rules, not the index.
     const siteUrl = siteUrls[item.id];
@@ -396,7 +408,9 @@ export default function RegionScreen() {
         }
       >
         <View style={styles.rowText}>
-          <Text style={[styles.rowName, { color: theme.text }]}>{item.displayName}</Text>
+          <Text style={[styles.rowName, { color: theme.text }]} numberOfLines={1}>
+            {item.displayName}
+          </Text>
           <Text style={[styles.rowSub, { color: theme.textMuted }]} numberOfLines={1}>
             {/* ACTIVE carries the selection now that the check means "downloaded". */}
             {isSelected && <Text style={{ color: accent[name] }}>ACTIVE · </Text>}
@@ -408,6 +422,27 @@ export default function RegionScreen() {
         </View>
 
         <View style={styles.rowActions}>
+          {/* Leftmost, so the download-state column still reads straight down the list. Shown
+              on every row: hearting an un-downloaded region is the point — it keeps a place
+              you visit occasionally at the top, ready to pull down. */}
+          <Pressable
+            onPress={() => toggleFavourite(item.id)}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isFavourite }}
+            accessibilityLabel={
+              isFavourite
+                ? `Remove ${item.displayName} from favourites`
+                : `Add ${item.displayName} to favourites`
+            }
+          >
+            <HeartIcon
+              size={20}
+              filled={isFavourite}
+              color={isFavourite ? accent[name] : theme.textSubtle}
+            />
+          </Pressable>
+
           {siteUrl ? (
             <Pressable
               onPress={() => openSite(item, siteUrl)}
@@ -527,15 +562,11 @@ export default function RegionScreen() {
         </View>
       )}
 
-      <SectionList
-        sections={sections}
+      <FlatList
+        data={rows}
         keyExtractor={(item) => item.id}
         renderItem={renderRow}
-        renderSectionHeader={({ section }) => (
-          <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>{section.title}</Text>
-        )}
         ItemSeparatorComponent={RowGap}
-        stickySectionHeadersEnabled={false}
         contentContainerStyle={styles.list}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -602,16 +633,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 12,
   },
-  list: { paddingHorizontal: 24, paddingBottom: 32 },
-  // Same eyebrow treatment as the Settings section labels.
-  sectionHeader: {
-    fontFamily: FONT.utility,
-    fontSize: 10,
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-    paddingTop: 18,
-    paddingBottom: 10,
-  },
+  list: { paddingHorizontal: 24, paddingTop: 14, paddingBottom: 32 },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -622,7 +644,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     gap: 12,
   },
-  // The link sits left of the download-state slot, which stays rightmost so the column of
+  // Heart, then link, then the download-state slot — which stays rightmost so the column of
   // cloud/check glyphs still reads straight down the list.
   rowActions: { flexDirection: "row", alignItems: "center", gap: 16 },
   rowGap: { height: 10 },

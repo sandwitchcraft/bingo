@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { getString, setString, StorageKeys } from "@/core/storage";
+import { getJSON, getString, setJSON, setString, StorageKeys } from "@/core/storage";
 import { useToast } from "@/ui/toast";
 import {
   BASE_URL,
@@ -66,6 +66,15 @@ type RegionValue = {
    */
   siteUrls: Readonly<Record<string, string>>;
   /**
+   * Regions the user has hearted. Ordering only — the picker floats these into a Favourites
+   * section above everything else. Deliberately orthogonal to `downloadedIds` and
+   * `selectedId`: a favourite region need not be on disk, and hearting one changes nothing
+   * about the rules in use.
+   */
+  favouriteIds: ReadonlySet<string>;
+  /** Heart or un-heart a region. In memory immediately; persistence is best-effort. */
+  toggleFavourite: (regionId: string) => void;
+  /**
    * Fetch and store one region's rules WITHOUT selecting it — that separation is the
    * feature: saving a region ahead of a trip shouldn't change the rules you're sorting
    * against right now. Pass a signal to make it cancellable.
@@ -108,6 +117,7 @@ export function RegionProvider({ children }: { children: ReactNode }) {
   const [downloadedIds, setDownloadedIds] = useState<ReadonlySet<string>>(
     () => new Set([BUNDLED_REGION_ID]),
   );
+  const [favouriteIds, setFavouriteIds] = useState<ReadonlySet<string>>(() => new Set());
   // Seeded from the bundled rules for the same reason as `downloadedIds` above.
   const [siteUrls, setSiteUrls] = useState<Readonly<Record<string, string>>>(() => {
     const seed: Record<string, string> = {};
@@ -118,6 +128,12 @@ export function RegionProvider({ children }: { children: ReactNode }) {
   // A slow index fetch must not overwrite a region the user picked while it was in flight.
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
+
+  // Mirrors the favourites so `toggleFavourite` can read the current set without closing over
+  // it (the callback is handed to every row and must stay stable). Computing the next set
+  // outside the state updater also keeps the write out of a function React may call twice.
+  const favouriteIdsRef = useRef(favouriteIds);
+  favouriteIdsRef.current = favouriteIds;
 
   /**
    * Keeps the link map in step with a set of rules we just wrote to disk. Removes the entry
@@ -143,6 +159,22 @@ export function RegionProvider({ children }: { children: ReactNode }) {
     );
     setString(StorageKeys.lastRegionByCategory(category), regionId).catch((error: unknown) => {
       console.warn("[region] failed to persist category default", error);
+    });
+  }, []);
+
+  /**
+   * Heart or un-heart a region. Nothing here can meaningfully fail from the user's side —
+   * the set is already live in memory — so a write that doesn't land warns rather than
+   * throwing, the same bargain `rememberCategoryDefault` makes.
+   */
+  const toggleFavourite = useCallback((regionId: string) => {
+    const next = new Set(favouriteIdsRef.current);
+    // `delete` reports whether it removed anything, which is the toggle.
+    if (!next.delete(regionId)) next.add(regionId);
+    favouriteIdsRef.current = next;
+    setFavouriteIds(next);
+    setJSON(StorageKeys.favouriteRegionIds, [...next]).catch((error: unknown) => {
+      console.warn("[region] failed to persist favourites", error);
     });
   }, []);
 
@@ -190,6 +222,19 @@ export function RegionProvider({ children }: { children: ReactNode }) {
       const links = await readCachedSiteUrls(downloaded);
       if (cancelled) return;
       setSiteUrls(links);
+
+      // Ids only, not validated against the catalog — the index hasn't been refreshed yet at
+      // this point, and a favourite for a region we can't currently see is harmless (it just
+      // has no row to sit on until the catalog comes back).
+      const storedFavourites = await getJSON<string[]>(StorageKeys.favouriteRegionIds);
+      if (cancelled) return;
+      // The set only becomes non-empty by the user hearting something, so a non-empty one here
+      // means a tap beat this read — don't clobber a choice they've already made.
+      if (Array.isArray(storedFavourites) && favouriteIdsRef.current.size === 0) {
+        const restoredFavourites = new Set(storedFavourites.filter((id) => typeof id === "string"));
+        favouriteIdsRef.current = restoredFavourites;
+        setFavouriteIds(restoredFavourites);
+      }
 
       const cachedIndex = await readCachedIndex();
       if (cancelled) return;
@@ -354,6 +399,8 @@ export function RegionProvider({ children }: { children: ReactNode }) {
       catalogIsFallback,
       downloadedIds,
       siteUrls,
+      favouriteIds,
+      toggleFavourite,
       downloadRegion,
       removeDownload,
       selectRegion,
@@ -366,6 +413,8 @@ export function RegionProvider({ children }: { children: ReactNode }) {
       catalogIsFallback,
       downloadedIds,
       siteUrls,
+      favouriteIds,
+      toggleFavourite,
       downloadRegion,
       removeDownload,
       selectRegion,
