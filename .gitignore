@@ -56,6 +56,5 @@ example
 /.vscode
 AGENTS.md
 CLAUDE.md
-scripts/ios-dev-build.sh
 .agents/*
 .venv/*
