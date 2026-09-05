@@ -158,7 +158,7 @@ export function ScanResultSheet() {
             primaryActionLabel="Scan another"
             onPrimaryAction={close}
             onViewHistory={() => {
-              dismiss();
+              close();
               router.push("/history");
             }}
             context="scan"

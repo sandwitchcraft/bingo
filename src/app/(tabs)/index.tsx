@@ -394,17 +394,19 @@ function NativeScanScreen() {
 
   return (
     <View style={styles.container}>
-      {isFocused && (
-        <Camera
-          style={StyleSheet.absoluteFill}
-          device={device}
-          isActive={isFocused}
-          outputs={[frameOutput]}
-          constraints={CAMERA_CONSTRAINTS}
-          onPreviewStarted={() => setPreviewReady(true)}
-          onPreviewStopped={() => setPreviewReady(false)}
-        />
-      )}
+      {/* Stays mounted across a blur — only `isActive` toggles. Unmounting here instead
+          would tear down the AVCaptureSession synchronously on the main thread via view
+          dealloc, racing the frame-processor thread and aborting in AVFCapture; `isActive`
+          releases it through vision-camera's own async path instead. */}
+      <Camera
+        style={StyleSheet.absoluteFill}
+        device={device}
+        isActive={isFocused}
+        outputs={[frameOutput]}
+        constraints={CAMERA_CONSTRAINTS}
+        onPreviewStarted={() => setPreviewReady(true)}
+        onPreviewStopped={() => setPreviewReady(false)}
+      />
 
       {previewReady && (
         <View style={[styles.probe, { top: insets.top + 44 }]} pointerEvents="none">
