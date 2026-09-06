@@ -1,21 +1,27 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { getJSON, getString, setJSON, setString, StorageKeys } from "@/core/storage";
+import { getString, setString, StorageKeys } from "@/core/storage";
 import { useToast } from "@/ui/toast";
 import {
+  applyRegistry,
   BASE_URL,
   BUNDLED_CATALOG,
+  BUNDLED_REGISTRY,
   BUNDLED_RULES,
   BUNDLED_REGION_ID,
   deleteCachedRules,
+  fetchItemRegistry,
   fetchRegionIndex,
   fetchRegionRules,
   listDownloadedRegionIds,
   readCachedIndex,
+  readCachedRegistry,
   readCachedRules,
   readCachedSiteUrls,
   writeCachedIndex,
+  writeCachedRegistry,
   writeCachedRules,
+  type ItemRegistry,
   type ProviderType,
   type RegionRules,
   type RegionSummary,
@@ -66,17 +72,8 @@ type RegionValue = {
    */
   siteUrls: Readonly<Record<string, string>>;
   /**
-   * Regions the user has hearted. Ordering only — the picker floats these into a Favourites
-   * section above everything else. Deliberately orthogonal to `downloadedIds` and
-   * `selectedId`: a favourite region need not be on disk, and hearting one changes nothing
-   * about the rules in use.
-   */
-  favouriteIds: ReadonlySet<string>;
-  /** Heart or un-heart a region. In memory immediately; persistence is best-effort. */
-  toggleFavourite: (regionId: string) => void;
-  /**
    * Fetch and store one region's rules WITHOUT selecting it — that separation is the
-   * feature: saving a region ahead of a trip shouldn't change the rules you're sorting
+   * feature: saving a place ahead of a trip shouldn't change the rules you're sorting
    * against right now. Pass a signal to make it cancellable.
    */
   downloadRegion: (summary: RegionSummary, signal?: AbortSignal) => Promise<void>;
@@ -84,7 +81,7 @@ type RegionValue = {
   removeDownload: (regionId: string) => Promise<void>;
   /**
    * Switch to an already-downloaded region. Reads the cached copy, so it works offline —
-   * that's the payoff for gating selection on a download.
+   * that's the payoff for downloading a place's rules when it's saved.
    */
   selectRegion: (summary: RegionSummary) => Promise<void>;
 };
@@ -103,7 +100,11 @@ function log(message: string) {
 
 export function RegionProvider({ children }: { children: ReactNode }) {
   const { showError } = useToast();
-  const [rules, setRules] = useState<RegionRules>(BUNDLED_RULES);
+  // Rules are stored (and cached) as fetched; names/keywords come from the registry at read
+  // time, so a registry refresh renames every region's items without re-fetching rules.
+  const [rawRules, setRules] = useState<RegionRules>(BUNDLED_RULES);
+  const [registry, setRegistry] = useState<ItemRegistry>(BUNDLED_REGISTRY);
+  const rules = useMemo(() => applyRegistry(rawRules, registry), [rawRules, registry]);
   const [selectedId, setSelectedId] = useState<string>(BUNDLED_REGION_ID);
   // The bundled region is municipal, so it seeds the residential slot; commercial starts empty.
   const [lastByCategory, setLastByCategory] = useState<Record<ProviderType, string | null>>(() => ({
@@ -117,7 +118,6 @@ export function RegionProvider({ children }: { children: ReactNode }) {
   const [downloadedIds, setDownloadedIds] = useState<ReadonlySet<string>>(
     () => new Set([BUNDLED_REGION_ID]),
   );
-  const [favouriteIds, setFavouriteIds] = useState<ReadonlySet<string>>(() => new Set());
   // Seeded from the bundled rules for the same reason as `downloadedIds` above.
   const [siteUrls, setSiteUrls] = useState<Readonly<Record<string, string>>>(() => {
     const seed: Record<string, string> = {};
@@ -128,12 +128,6 @@ export function RegionProvider({ children }: { children: ReactNode }) {
   // A slow index fetch must not overwrite a region the user picked while it was in flight.
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
-
-  // Mirrors the favourites so `toggleFavourite` can read the current set without closing over
-  // it (the callback is handed to every row and must stay stable). Computing the next set
-  // outside the state updater also keeps the write out of a function React may call twice.
-  const favouriteIdsRef = useRef(favouriteIds);
-  favouriteIdsRef.current = favouriteIds;
 
   /**
    * Keeps the link map in step with a set of rules we just wrote to disk. Removes the entry
@@ -162,22 +156,6 @@ export function RegionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  /**
-   * Heart or un-heart a region. Nothing here can meaningfully fail from the user's side —
-   * the set is already live in memory — so a write that doesn't land warns rather than
-   * throwing, the same bargain `rememberCategoryDefault` makes.
-   */
-  const toggleFavourite = useCallback((regionId: string) => {
-    const next = new Set(favouriteIdsRef.current);
-    // `delete` reports whether it removed anything, which is the toggle.
-    if (!next.delete(regionId)) next.add(regionId);
-    favouriteIdsRef.current = next;
-    setFavouriteIds(next);
-    setJSON(StorageKeys.favouriteRegionIds, [...next]).catch((error: unknown) => {
-      console.warn("[region] failed to persist favourites", error);
-    });
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
 
@@ -192,9 +170,13 @@ export function RegionProvider({ children }: { children: ReactNode }) {
 
       // Cached rules next, so the chosen region is live before any network call. Read even
       // for the bundled region: a previously fetched copy of it is newer than the snapshot.
-      const cachedRules = await readCachedRules(savedId);
+      const [cachedRules, cachedRegistry] = await Promise.all([
+        readCachedRules(savedId),
+        readCachedRegistry(),
+      ]);
       if (cancelled) return;
       if (cachedRules) setRules(cachedRules);
+      if (cachedRegistry) setRegistry(cachedRegistry);
 
       // Restore the remembered home/work defaults, then pin the active region as its own
       // category's default — it IS the current one. Category comes from the cached rules; the
@@ -223,19 +205,6 @@ export function RegionProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
       setSiteUrls(links);
 
-      // Ids only, not validated against the catalog — the index hasn't been refreshed yet at
-      // this point, and a favourite for a region we can't currently see is harmless (it just
-      // has no row to sit on until the catalog comes back).
-      const storedFavourites = await getJSON<string[]>(StorageKeys.favouriteRegionIds);
-      if (cancelled) return;
-      // The set only becomes non-empty by the user hearting something, so a non-empty one here
-      // means a tap beat this read — don't clobber a choice they've already made.
-      if (Array.isArray(storedFavourites) && favouriteIdsRef.current.size === 0) {
-        const restoredFavourites = new Set(storedFavourites.filter((id) => typeof id === "string"));
-        favouriteIdsRef.current = restoredFavourites;
-        setFavouriteIds(restoredFavourites);
-      }
-
       const cachedIndex = await readCachedIndex();
       if (cancelled) return;
       // Seeded with the bundled catalog so the rules refresh below still has a URL to
@@ -255,10 +224,15 @@ export function RegionProvider({ children }: { children: ReactNode }) {
       // rules fetch entirely (one request instead of two on the common no-change launch).
       // `checkedOk` records whether we actually reached bingoDB, which is what the staleness
       // warning below keys off — reaching the index counts even if nothing changed.
+      // `fresh` on both launch fetches: Pages serves everything with max-age=600, and a launch
+      // inside that window after a deploy would otherwise read the *old* index from the OS
+      // cache, see versions that match the cached rules, and skip the fetch — the update
+      // stays invisible for ten minutes. The index is ~2 KB, and the rules are only fetched
+      // when the index says they changed, so the cost of bypassing is one small request.
       let checkedOk = false;
       let indexOk = false;
       try {
-        available = await fetchRegionIndex();
+        available = await fetchRegionIndex({ fresh: true });
         if (cancelled) return;
         setCatalog(available);
         setCatalogIsFallback(false);
@@ -268,6 +242,20 @@ export function RegionProvider({ children }: { children: ReactNode }) {
         log(`index: ${available.length} regions fetched from ${BASE_URL}index.json`);
       } catch (error) {
         console.warn("[region] index refresh failed; using cached or bundled catalog", error);
+      }
+      if (cancelled) return;
+
+      // The registry is one small file shared by every region, refreshed on every launch:
+      // it isn't listed in the index, so there's no version to compare against.
+      try {
+        const freshRegistry = await fetchItemRegistry();
+        if (cancelled) return;
+        setRegistry(freshRegistry);
+        await writeCachedRegistry(freshRegistry);
+        checkedOk = true;
+        log(`registry: ${Object.keys(freshRegistry.items).length} items (${freshRegistry.generated_at}) from ${BASE_URL}items.json`);
+      } catch (error) {
+        console.warn("[region] registry refresh failed; keeping cached or bundled registry", error);
       }
       if (cancelled) return;
 
@@ -288,7 +276,7 @@ export function RegionProvider({ children }: { children: ReactNode }) {
         log(`rules: ${summary.displayName} unchanged at v${summary.version} per index; skipped fetch`);
       } else {
         try {
-          const fresh = await fetchRegionRules(summary);
+          const fresh = await fetchRegionRules(summary, { fresh: true });
           checkedOk = true; // server reached, regardless of whether we still apply the result
           if (cancelled || selectedIdRef.current !== savedId) return;
           setRules(fresh);
@@ -399,8 +387,6 @@ export function RegionProvider({ children }: { children: ReactNode }) {
       catalogIsFallback,
       downloadedIds,
       siteUrls,
-      favouriteIds,
-      toggleFavourite,
       downloadRegion,
       removeDownload,
       selectRegion,
@@ -413,8 +399,6 @@ export function RegionProvider({ children }: { children: ReactNode }) {
       catalogIsFallback,
       downloadedIds,
       siteUrls,
-      favouriteIds,
-      toggleFavourite,
       downloadRegion,
       removeDownload,
       selectRegion,

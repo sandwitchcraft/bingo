@@ -6,17 +6,20 @@
  * *currently active* region's rules at render time — an old scan re-renders under whatever
  * rules are loaded now, which is intentional. `formatScannedAt` below is the only
  * date-rendering rule: time alone for today, date · time once it isn't.
+ *
+ * Each row is the sheet's item row: the bin's lid, the item, the bin's name in its tint ink.
  */
 import { FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { BIN_LABEL, binColor } from "@/core/bins";
+import { BIN_SHORT_LABEL } from "@/core/bins";
 import { parseScannedAt, type ScanHistoryRow } from "@/features/history/db";
 import { useScanHistory } from "@/features/history/useScanHistory";
 import { getItemDisplayName } from "@/features/region/regionData";
 import { useRegionRules } from "@/features/region/regionStore";
+import { Lid } from "@/ui/Lid";
 import { Wordmark } from "@/ui/Wordmark";
-import { FONT, radii, useTheme } from "@/ui/theme";
+import { radii, TYPE, useTheme } from "@/ui/theme";
 
 /** Date only once it's no longer today, since the day is the useful part by then. */
 function formatScannedAt(scannedAt: string): string {
@@ -30,20 +33,19 @@ function formatScannedAt(scannedAt: string): string {
 function ScanRow({ scan }: { scan: ScanHistoryRow }) {
   const { theme } = useTheme();
   const rules = useRegionRules();
-  const accent = binColor(scan.bin_result);
+  const swatch = theme.bins[scan.bin_result];
 
   return (
-    <View style={[styles.row, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+    <View style={[styles.row, { backgroundColor: theme.card, borderColor: theme.line }]}>
+      <Lid bin={scan.bin_result} />
       <View style={styles.rowMain}>
-        <Text style={[styles.itemName, { color: theme.text }]}>
+        <Text style={[TYPE.row, { color: theme.text }]} numberOfLines={1}>
           {/* Rows scanned under a different region fall back to the formatted key. */}
           {getItemDisplayName(rules, scan.item_name)}
         </Text>
-        <Text style={[styles.binLabel, { color: accent }]}>{BIN_LABEL[scan.bin_result]}</Text>
+        <Text style={[TYPE.mono, { color: theme.text2 }]}>{formatScannedAt(scan.scanned_at)}</Text>
       </View>
-      <Text style={[styles.timestamp, { color: theme.textMuted }]}>
-        {formatScannedAt(scan.scanned_at)}
-      </Text>
+      <Text style={[TYPE.rowBin, { color: swatch.tintInk }]}>{BIN_SHORT_LABEL[scan.bin_result]}</Text>
     </View>
   );
 }
@@ -55,19 +57,19 @@ export default function HistoryScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={["top"]}>
       <View style={styles.header}>
-        <Wordmark size={15} />
-        <Text style={[styles.heading, { color: theme.text }]}>Sort history</Text>
+        <Wordmark />
+        <Text style={[TYPE.h2, styles.heading, { color: theme.text }]}>History</Text>
       </View>
 
       {error ? (
         <View style={styles.body}>
-          <Text style={[styles.placeholder, { color: theme.textMuted }]}>
+          <Text style={[TYPE.bodySm, styles.placeholder, { color: theme.text2 }]}>
             Couldn&apos;t load your history.
           </Text>
         </View>
       ) : (
         // `loading` renders an empty list rather than the empty-state copy, so
-        // "No scans yet" can't flash before the first query returns.
+        // "Nothing yet" can't flash before the first query returns.
         <FlatList
           data={data?.scans ?? []}
           keyExtractor={(scan) => String(scan.id)}
@@ -77,8 +79,8 @@ export default function HistoryScreen() {
           ListEmptyComponent={
             loading ? null : (
               <View style={styles.body}>
-                <Text style={[styles.placeholder, { color: theme.textMuted }]}>
-                  No scans yet. Scanned items are saved here.
+                <Text style={[TYPE.bodySm, styles.placeholder, { color: theme.text2 }]}>
+                  Nothing sorted yet. Items you scan are saved here.
                 </Text>
               </View>
             )
@@ -91,33 +93,19 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 12 },
-  heading: {
-    fontFamily: FONT.heading,
-    fontSize: 26,
-    letterSpacing: -0.4,
-    marginTop: 4,
-  },
-  list: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 32, gap: 10 },
+  header: { paddingHorizontal: 22, paddingTop: 10, paddingBottom: 14, gap: 14 },
+  heading: {},
+  list: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 32, gap: 9 },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: radii.card,
-    borderWidth: 1,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
     gap: 12,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
   },
-  rowMain: { flex: 1, gap: 3 },
-  itemName: { fontFamily: FONT.bodyEmphasis, fontSize: 15 },
-  binLabel: {
-    fontFamily: FONT.utilityStrong,
-    fontSize: 10,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-  },
-  timestamp: { fontFamily: FONT.utility, fontSize: 11 },
+  rowMain: { flex: 1, gap: 2 },
   body: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  placeholder: { fontFamily: FONT.body, fontSize: 14, textAlign: "center" },
+  placeholder: { textAlign: "center" },
 });

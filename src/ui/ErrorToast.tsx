@@ -2,8 +2,8 @@
  * Renders the error banner whose state lives in `toast.tsx`. Mounted once, last in the root
  * layout, so it floats above the tab bar and the result sheet alike.
  *
- * Red, warning triangle, drops in from the top, auto-dismisses after `VISIBLE_MS`, tap to
- * dismiss early. Top rather than bottom because the bottom of the screen belongs to the tab
+ * Brick red, warning triangle, drops in from the top, auto-dismisses after `VISIBLE_MS`, tap
+ * to dismiss early. Top rather than bottom because the bottom of the screen belongs to the tab
  * bar and the result sheet's travel path. Errors only — success is confirmed inline by
  * whatever screen produced it.
  */
@@ -17,33 +17,13 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Path } from "react-native-svg";
 
-import { colors, FONT, radii } from "@/ui/theme";
+import { WarningGlyph } from "@/ui/Icons";
+import { palette, radii, TYPE } from "@/ui/theme";
 import { useToast, type Toast } from "@/ui/toast";
 
 const VISIBLE_MS = 5_000;
 const TOAST_EASING = Easing.bezier(0.32, 0.72, 0, 1);
-
-/** Matches the item pictograms: single-weight line on a 24px grid, round caps. */
-function WarningIcon({ size, color }: { size: number; color: string }) {
-  return (
-    <Svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={color}
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <Path d="M12 3.6 2.7 19.4a1.4 1.4 0 0 0 1.2 2.1h16.2a1.4 1.4 0 0 0 1.2-2.1z" />
-      <Path d="M12 9.4v4.6" />
-      <Path d="M12 17.6h.01" />
-    </Svg>
-  );
-}
 
 /**
  * The error banner. Mounted once at the root above the router, so it floats over whatever
@@ -104,7 +84,7 @@ export function ErrorToast() {
           accessibilityLabel={shown?.message}
           accessibilityHint="Tap to dismiss"
         >
-          <WarningIcon size={20} color={colors.white} />
+          <WarningGlyph size={20} color={palette.cream50} />
           <Text style={styles.message}>{shown?.message ?? ""}</Text>
         </Pressable>
       </Animated.View>
@@ -124,22 +104,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
-    backgroundColor: colors.alert,
-    borderRadius: radii.card,
+    // Same fill in both themes: an error reads as an error, not as a themed surface.
+    backgroundColor: palette.alert,
+    borderRadius: radii.md,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    // Same fill in both themes: an error reads as an error, not as a themed surface.
-    shadowColor: colors.ink,
+    shadowColor: palette.umber900,
     shadowOpacity: 0.22,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
   message: {
+    ...TYPE.note,
     flex: 1,
-    fontFamily: FONT.body,
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.white,
+    color: palette.cream50,
   },
 });

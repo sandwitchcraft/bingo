@@ -14,7 +14,7 @@ import type { RegionSummary } from "@/features/region/regionSource";
  * on launch partly for that reason.
  *
  * This is best-effort by design. A miss is not an error state to recover from — the manual
- * picker (Settings → Region) is the primary path and stays the fallback for every failure
+ * picker (Location → Change region) is the primary path and stays the fallback for every failure
  * here, so every one of them throws a `LocationError` the UI can turn into one sentence.
  */
 

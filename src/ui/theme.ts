@@ -1,24 +1,105 @@
 import { createContext, useContext } from "react";
-import type { ColorSchemeName } from "react-native";
+import type { ColorSchemeName, TextStyle } from "react-native";
 
-import { binColors, colors, fonts, logo, radii, spacing } from "@/ui/brand";
+import { BIN_ORDER, type BinType } from "@/core/bins";
+import {
+  BIN_ROLE,
+  binSwatches,
+  fonts,
+  iconStroke,
+  lid,
+  logo,
+  modes,
+  palette,
+  radii,
+  scanSurface,
+  spacing,
+  type BinSwatch,
+} from "@/ui/brand";
 
-// Brand tokens are re-exported here so components have a single import site for
-// anything visual (`@/ui/theme`). brand.ts mirrors docs/design/branding/theme.ts and is
-// the source of truth for raw token values — change tokens there, not here.
-export { binColors, colors, fonts, logo, radii, spacing };
+// Brand tokens are re-exported here so components have a single import site for anything
+// visual (`@/ui/theme`). brand.ts mirrors docs/design/branding/theme.ts and is the source of
+// truth for raw token values — change tokens there, not here.
+export { iconStroke, lid, logo, palette, radii, scanSurface, spacing };
+export type { BinSwatch };
 
-// Font families as registered by expo-font (see the root layout). Each family has
-// exactly one job per the brand guide: Manrope displays/headings, Inter body,
-// IBM Plex Mono every label/eyebrow/timestamp. There is no Inter label style.
+// Font families as registered by expo-font (see the root layout). Each family has exactly
+// one job: Bricolage for display/titles/button labels, Hanken for all prose and rows, IBM
+// Plex Mono for anything sourced from a rulebook (stamps, eyebrows, dates).
 export const FONT = {
   display: fonts.display.fontFamily,
   heading: fonts.heading.fontFamily,
   body: fonts.body.fontFamily,
   bodyEmphasis: fonts.bodyEmphasis.fontFamily,
+  bodyStrong: fonts.bodyStrong.fontFamily,
   utility: fonts.utility.fontFamily,
-  utilityStrong: fonts.utilityStrong.fontFamily,
 } as const;
+
+/**
+ * The type scale from the sheet, as ready-to-spread text styles. RN's `letterSpacing` is in
+ * points, so the sheet's em tracking is pre-multiplied by the size here. Display is always
+ * Bricolage and always negatively tracked; mono is always uppercase and tracked out.
+ */
+export const TYPE = {
+  /** Bricolage 700 / 50 — the one-word answer. */
+  answer: { fontFamily: FONT.display, fontSize: 50, lineHeight: 50, letterSpacing: -1.75 },
+  /** Bricolage 700 / 36 — section titles. */
+  h1: { fontFamily: FONT.display, fontSize: 36, lineHeight: 38, letterSpacing: -0.9 },
+  /** Bricolage 700 / 32 — screen titles. */
+  h2: { fontFamily: FONT.display, fontSize: 32, lineHeight: 34, letterSpacing: -0.96 },
+  /** Bricolage 600 / 26 — the item you asked about. */
+  h3: { fontFamily: FONT.heading, fontSize: 26, lineHeight: 28, letterSpacing: -0.52 },
+  /** Bricolage 600 / 19 — card headlines ("Looks like"). */
+  h4: { fontFamily: FONT.heading, fontSize: 19, lineHeight: 22, letterSpacing: -0.38 },
+  /** Bricolage 600 / 17 — list titles, place names, large button labels. */
+  title: { fontFamily: FONT.heading, fontSize: 17, lineHeight: 20, letterSpacing: -0.26 },
+  /** Bricolage 600 / 15 — button labels. */
+  button: { fontFamily: FONT.heading, fontSize: 15, lineHeight: 18, letterSpacing: -0.15 },
+  /** Bricolage 600 / 13 — the bin label at the end of a row. */
+  rowBin: { fontFamily: FONT.heading, fontSize: 13, lineHeight: 16 },
+  /** Hanken 400 / 19 — lead paragraph. */
+  lead: { fontFamily: FONT.body, fontSize: 19, lineHeight: 28 },
+  /** Hanken 400 / 16 — body. */
+  body: { fontFamily: FONT.body, fontSize: 16, lineHeight: 24 },
+  /** Hanken 400 / 15 — dense body (the answer card's local line). */
+  bodySm: { fontFamily: FONT.body, fontSize: 15, lineHeight: 22 },
+  /** Hanken 400 / 14 — notes. */
+  note: { fontFamily: FONT.body, fontSize: 14, lineHeight: 21 },
+  /** Hanken 500 / 15 — item rows. */
+  row: { fontFamily: FONT.bodyEmphasis, fontSize: 15, lineHeight: 20 },
+  /** Hanken 400 / 13 — meta lines, hints. */
+  small: { fontFamily: FONT.body, fontSize: 13, lineHeight: 18 },
+  /** Hanken 600 / 13 — the location chip label. */
+  chip: { fontFamily: FONT.bodyStrong, fontSize: 13, lineHeight: 16 },
+  /** Hanken 600 / 12 — tag chips ("Certain"). */
+  tag: { fontFamily: FONT.bodyStrong, fontSize: 12, lineHeight: 14 },
+  /** Plex Mono 400 / 12 — section eyebrows. */
+  eyebrow: {
+    fontFamily: FONT.utility,
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+  /** Plex Mono 400 / 11 — provenance stamps. */
+  stamp: {
+    fontFamily: FONT.utility,
+    fontSize: 11,
+    lineHeight: 14,
+    letterSpacing: 0.88,
+    textTransform: "uppercase",
+  },
+  /** Plex Mono 400 / 10 — micro eyebrows inside cards. */
+  micro: {
+    fontFamily: FONT.utility,
+    fontSize: 10,
+    lineHeight: 13,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  /** Plex Mono 400 / 10, not uppercased — hex codes, timestamps. */
+  mono: { fontFamily: FONT.utility, fontSize: 10, lineHeight: 13 },
+} as const satisfies Record<string, TextStyle>;
 
 /** A resolved, concrete theme — always one of two real palettes. */
 export type ThemeName = "dark" | "light";
@@ -31,89 +112,56 @@ export type ThemeName = "dark" | "light";
 export type ThemePreference = ThemeName | "system";
 
 export type Theme = {
+  /** Page ground. */
   bg: string;
-  bgAlt: string;
-  bgInput: string;
+  /** The darker sand — secondary chips, segment tracks, pressed fills, the Places screen. */
+  surface: string;
+  /** Raised cards, sheets, inputs sitting on the ground. */
   card: string;
-  cardBorder: string;
+  /** A recessed field or row inside a card. */
+  card2: string;
   text: string;
-  textMuted: string;
-  textSubtle: string;
-  textBody: string;
-  primary: string;
-  primaryText: string;
-  secondaryBg: string;
-  secondaryText: string;
-  navBg: string;
-  navBorder: string;
-  toggleTrack: string;
-  toggleThumb: string;
-  handleBar: string;
-  segmentActiveBg: string;
-  segmentActiveBorder: string;
+  text2: string;
+  /** 1px hairline — every container edge. */
+  line: string;
+  /** Heavier hairline — inputs, secondary buttons. */
+  lineStrong: string;
+  /** Green: every button, toggle, active state and confirmation. */
+  accent: string;
+  /** One step further along the ramp — hover/pressed, ghost-button text. */
+  accentStrong: string;
+  /** Soft green fill for chips, the rationale note, the active place row. */
+  accentTint: string;
+  /** Ink on `accentTint`. */
+  accentInk: string;
+  /** Ink on `accent`. */
+  onAccent: string;
   scrim: string;
+  shadow: string;
+  /** Per-bin swatches for this lightness. Always resolve bin colour through here. */
+  bins: Record<BinType, BinSwatch>;
 };
 
-// Light is the primary mode per the brand guide; every value maps to a named token.
+function binsFor(mode: ThemeName): Record<BinType, BinSwatch> {
+  const out = {} as Record<BinType, BinSwatch>;
+  for (const bin of BIN_ORDER) out[bin] = binSwatches[mode][BIN_ROLE[bin]];
+  return out;
+}
+
+// Light is the default. Every value maps to a named token in brand.ts; only `scrim` is
+// derived here (the sheet has no modal scrim — it's warm ink at low alpha).
 export const lightTheme: Theme = {
-  bg: colors.paper,
-  bgAlt: colors.white,
-  bgInput: "#F1F0EC",
-  card: colors.white,
-  cardBorder: colors.line,
-  text: colors.ink,
-  textMuted: colors.slate,
-  textSubtle: "#8A9691",
-  textBody: colors.ink,
-  primary: colors.sproutDeep,
-  primaryText: colors.white,
-  secondaryBg: "rgba(57,179,120,0.10)",
-  secondaryText: colors.sproutDeep,
-  navBg: colors.paper,
-  navBorder: colors.line,
-  toggleTrack: colors.line,
-  toggleThumb: "#8A9691",
-  handleBar: colors.line,
-  segmentActiveBg: colors.white,
-  segmentActiveBorder: colors.line,
-  scrim: "rgba(30,43,39,0.35)",
+  ...modes.light,
+  scrim: "rgba(33,31,26,0.35)",
+  bins: binsFor("light"),
 };
 
-// Dark is a supported secondary mode, anchored on ink: every filled surface (screen,
-// sheet, card) IS ink, and structure comes from hairlines rather than from stacked
-// lighter surfaces. Ink's hue is a desaturated green, so *lifting* it to separate a
-// surface reads as dark green — the brighter the lift, the greener it looks. Where a
-// control genuinely needs to sit apart (an input track), it recesses BELOW ink
-// instead of lifting above it, which keeps the whole screen on-token.
+// Dark is the same palette warmed and lifted, not inverted: the cream darkens into umber,
+// and every bin fill rises to its lighter step so the answer card takes dark ink.
 export const darkTheme: Theme = {
-  bg: colors.ink,
-  bgAlt: colors.ink,
-  bgInput: "#0E1210", // recessed below ink, not lifted above it
-  card: colors.ink,
-  cardBorder: "#2C3633",
-  text: colors.paper,
-  textMuted: "#8B9B96", // slate, lightened to stay legible on ink
-  textSubtle: colors.slate,
-  textBody: "#D9DEDB",
-  primary: colors.sproutDeep,
-  primaryText: colors.white,
-  secondaryBg: "rgba(57,179,120,0.14)",
-  secondaryText: colors.sprout,
-  navBg: colors.ink,
-  navBorder: "#2C3633",
-  toggleTrack: "#2C3633",
-  toggleThumb: "#8B9B96",
-  handleBar: "#333D3A",
-  segmentActiveBg: colors.ink, // raised back to ink out of the recessed track
-  segmentActiveBorder: "#374340",
+  ...modes.dark,
   scrim: "rgba(0,0,0,0.55)",
-};
-
-// Accent used for active/selected affordances (tab bar, segment labels), as
-// distinct from `primary`, which is reserved for button fills.
-export const accent: Record<ThemeName, string> = {
-  light: colors.sproutDeep,
-  dark: colors.sprout,
+  bins: binsFor("dark"),
 };
 
 export const THEMES: Record<ThemeName, Theme> = {

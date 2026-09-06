@@ -1,4 +1,5 @@
 import bundledToronto from "@/assets/data/canada/ontario/toronto/toronto.json";
+import bundledRegistry from "@/assets/data/items.json";
 import type { BinType } from "@/core/bins";
 import { fetchJSON } from "@/core/net";
 import { getJSON, listKeys, removeKey, setJSON, StorageKeys } from "@/core/storage";
@@ -17,6 +18,26 @@ import { getJSON, listKeys, removeKey, setJSON, StorageKeys } from "@/core/stora
 export const BASE_URL = "https://sandwitchcraft.github.io/bingoDB/";
 
 const INDEX_PATH = "index.json";
+const REGISTRY_PATH = "items.json";
+
+/**
+ * One entry in bingoDB's global item registry (`items.json`). The registry owns what an
+ * item *is* — its name, search keywords and material family — and a region's rules file
+ * only says which bin it goes in. That split is deliberate: it stops two regions from
+ * naming the same key differently, and it's why `RegionItem.display_name` is filled in
+ * from here (`applyRegistry`) rather than trusted from the region file.
+ */
+export type RegistryItem = {
+  display_name: string;
+  keywords: string[];
+  /** A slug from the registry's `materials` list ("plastic", "organic", …). */
+  material: string;
+};
+
+export type ItemRegistry = {
+  generated_at: string;
+  items: Record<string, RegistryItem>;
+};
 
 /**
  * Which kind of waste provider a region entry describes. Most regions are `municipal`
@@ -59,11 +80,40 @@ export type RegionSummary = {
 };
 
 export type RegionItem = {
+  /**
+   * Registry name when the key is in the registry (the common case), else the region's own
+   * name, else the title-cased key. Region files only carry a `display_name` for keys the
+   * registry doesn't define yet.
+   */
   display_name: string;
   bin: BinType;
   description: string;
   /** Not emitted by every region — the consult-guide rows carry it. */
   link?: string;
+  /** From the registry via `applyRegistry`; absent for keys the registry doesn't define. */
+  keywords?: string[];
+  material?: string;
+};
+
+/** One published notice (holiday schedules, program changes, contamination warnings). */
+export type RegionNotice = {
+  id: string;
+  title: string;
+  body: string;
+  /** ISO `YYYY-MM-DD`, same as the rules file's `last_updated`. */
+  date: string;
+  /** Drives the badge: `alert` for something to act on, `info` for everything else. */
+  kind: "info" | "alert";
+  /** Optional deep link into the provider's own site. */
+  link?: string;
+};
+
+export type PlasticCode = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+/** A region's verdict on one resin code, with an optional one-line qualifier. */
+export type PlasticVerdict = {
+  bin: BinType;
+  note?: string;
 };
 
 export type RegionRules = {
@@ -80,6 +130,10 @@ export type RegionRules = {
   last_updated: string;
   version: string;
   location_path: string[];
+  /** Hand-maintained on the bingoDB side for now (no Notion source yet) — absent ⇒ none. */
+  notices: RegionNotice[];
+  /** Hand-maintained on the bingoDB side for now (no Notion source yet) — absent ⇒ none. */
+  plastics: Partial<Record<PlasticCode, PlasticVerdict>>;
   items: Record<string, RegionItem>;
 };
 
@@ -166,6 +220,49 @@ export function parseRegionIndex(raw: unknown): RegionSummary[] {
   return regions;
 }
 
+const NOTICE_KINDS = new Set(["info", "alert"]);
+
+/** Skips a malformed notice rather than rejecting the whole file over one bad entry. */
+function parseNotices(raw: unknown): RegionNotice[] {
+  if (!Array.isArray(raw)) return [];
+  const notices: RegionNotice[] = [];
+  for (const entry of raw) {
+    if (!isRecord(entry)) continue;
+    const { id, title, body, date, kind } = entry;
+    if (
+      typeof id !== "string" || !id ||
+      typeof title !== "string" || !title ||
+      typeof body !== "string" ||
+      typeof date !== "string" ||
+      !NOTICE_KINDS.has(kind as string)
+    ) continue;
+    notices.push({
+      id,
+      title,
+      body,
+      date,
+      kind: kind as "info" | "alert",
+      ...(typeof entry.link === "string" ? { link: entry.link } : {}),
+    });
+  }
+  return notices;
+}
+
+/** Only "1".."7" keys with a recognized bin are kept — anything else is silently dropped. */
+function parsePlastics(raw: unknown): Partial<Record<PlasticCode, PlasticVerdict>> {
+  if (!isRecord(raw)) return {};
+  const plastics: Partial<Record<PlasticCode, PlasticVerdict>> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const code = Number(key);
+    if (!Number.isInteger(code) || code < 1 || code > 7 || !isRecord(value)) continue;
+    plastics[code as PlasticCode] = {
+      bin: toBinType(value.bin),
+      ...(typeof value.note === "string" ? { note: value.note } : {}),
+    };
+  }
+  return plastics;
+}
+
 /** Throws on a shape we can't use at all — a rules file with no items is not a region. */
 export function parseRegionRules(raw: unknown): RegionRules {
   if (!isRecord(raw) || !isRecord(raw.items)) {
@@ -196,8 +293,59 @@ export function parseRegionRules(raw: unknown): RegionRules {
     last_updated: typeof raw.last_updated === "string" ? raw.last_updated : "",
     version: typeof raw.version === "string" ? raw.version : "",
     location_path: locationPath,
+    notices: parseNotices(raw.notices),
+    plastics: parsePlastics(raw.plastics),
     items,
   };
+}
+
+/**
+ * Lenient like `parseRegionIndex`: a malformed entry is skipped, not fatal. An entry needs
+ * only a non-empty `display_name` to be useful; keywords and material degrade to empty.
+ */
+export function parseItemRegistry(raw: unknown): ItemRegistry {
+  if (!isRecord(raw) || !isRecord(raw.items)) {
+    throw new Error("Malformed item registry: no items");
+  }
+  const items: Record<string, RegistryItem> = {};
+  for (const [key, value] of Object.entries(raw.items)) {
+    if (!isRecord(value) || typeof value.display_name !== "string" || !value.display_name) continue;
+    items[key] = {
+      display_name: value.display_name,
+      keywords: asStringArray(value.keywords),
+      material: typeof value.material === "string" ? value.material : "",
+    };
+  }
+  return {
+    generated_at: typeof raw.generated_at === "string" ? raw.generated_at : "",
+    items,
+  };
+}
+
+/**
+ * Fills each region item's name (and keywords/material) from the registry. Precedence is
+ * registry → region's own `display_name` → title-cased key, and the last two are already
+ * collapsed by `parseRegionRules`, so this only has to overlay. Returns the same object
+ * when nothing changes so a store can keep referential stability.
+ */
+export function applyRegistry(rules: RegionRules, registry: ItemRegistry): RegionRules {
+  let changed = false;
+  const items: Record<string, RegionItem> = {};
+  for (const [key, item] of Object.entries(rules.items)) {
+    const entry = registry.items[key];
+    if (!entry) {
+      items[key] = item;
+      continue;
+    }
+    changed = true;
+    items[key] = {
+      ...item,
+      display_name: entry.display_name,
+      keywords: entry.keywords,
+      material: entry.material,
+    };
+  }
+  return changed ? { ...rules, items } : rules;
 }
 
 /**
@@ -233,6 +381,12 @@ export async function fetchRegionRules(
   return parseRegionRules(await fetchJSON(url, { signal: options?.signal }));
 }
 
+/** The registry isn't listed in the index, so there's no version to skip on — always fetched. */
+export async function fetchItemRegistry(options?: { fresh?: boolean }): Promise<ItemRegistry> {
+  const url = BASE_URL + REGISTRY_PATH;
+  return parseItemRegistry(await fetchJSON(options?.fresh ? bustCache(url) : url));
+}
+
 // --- Cache -----------------------------------------------------------------
 
 export function readCachedIndex(): Promise<RegionSummary[] | null> {
@@ -243,8 +397,34 @@ export function writeCachedIndex(regions: RegionSummary[]): Promise<void> {
   return setJSON(StorageKeys.regionIndex, regions);
 }
 
-export function readCachedRules(regionId: string): Promise<RegionRules | null> {
-  return getJSON<RegionRules>(StorageKeys.regionRules(regionId));
+/**
+ * Cached copies are re-parsed on the way out, same as a network response. The parsers are
+ * idempotent on already-parsed data, and it means a field added to the schema (notices,
+ * plastics, keywords) is present — defaulted — on rules an older install cached before the
+ * field existed, instead of being `undefined` for every screen to guard against.
+ */
+function reparse<T>(raw: unknown, parse: (raw: unknown) => T, key: string): T | null {
+  if (raw == null) return null;
+  try {
+    return parse(raw);
+  } catch (error) {
+    console.warn(`[storage] discarding unparseable cache entry ${key}`, error);
+    return null;
+  }
+}
+
+export async function readCachedRegistry(): Promise<ItemRegistry | null> {
+  const key = StorageKeys.itemRegistry;
+  return reparse(await getJSON(key), parseItemRegistry, key);
+}
+
+export function writeCachedRegistry(registry: ItemRegistry): Promise<void> {
+  return setJSON(StorageKeys.itemRegistry, registry);
+}
+
+export async function readCachedRules(regionId: string): Promise<RegionRules | null> {
+  const key = StorageKeys.regionRules(regionId);
+  return reparse(await getJSON(key), parseRegionRules, key);
 }
 
 export function writeCachedRules(regionId: string, rules: RegionRules): Promise<void> {
@@ -295,6 +475,13 @@ export async function listDownloadedRegionIds(): Promise<string[]> {
  */
 export const BUNDLED_REGION_ID = "canada/ontario/toronto";
 export const BUNDLED_RULES: RegionRules = parseRegionRules(bundledToronto);
+
+/**
+ * Snapshot of `items.json`, same reasoning as the rules: the bundled region's items have no
+ * names without it (the live file stopped carrying `display_name` for registry keys), so an
+ * offline first launch would otherwise show title-cased slugs.
+ */
+export const BUNDLED_REGISTRY: ItemRegistry = parseItemRegistry(bundledRegistry);
 
 /**
  * What the picker shows when neither the network nor the cache can supply an index.

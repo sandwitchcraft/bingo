@@ -2,16 +2,14 @@
  * Settings tab. A scrolling list of preference rows, each one wired to the provider that
  * owns the state — this screen holds no preferences of its own.
  *
- * What it offers: theme mode, scan mode, the active region (pushes the full-screen picker
- * in `src/app/region.tsx`, which is also where location detection now lives), clear history,
- * and the dev-only seed/random-sort helpers. Rule updates are checked automatically on every
+ * What it offers: theme mode, scan mode, clear history, and the dev-only seed/random-sort
+ * helpers. The active region has its own tab (Location), so it isn't repeated here. Rule updates are checked automatically on every
  * app open (see `regionStore.tsx`), so there is no manual refresh here.
  *
  * Feedback here is deliberately split. Failures with nowhere else to land go to the error
  * toast; successes confirm **inline** rather than as a banner, because a banner that also
  * carries good news gets dismissed unread.
  */
-import { useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -19,15 +17,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { clearScanHistory } from "@/features/history/db";
 import { seedScanHistory } from "@/features/history/devSeed";
-import { getRandomItemKey, getRegionName, getRegionPath } from "@/features/region/regionData";
+import { getRandomItemKey, getRegionPath } from "@/features/region/regionData";
 import { submitReport } from "@/features/reports/reports";
-import { regionSubtitle } from "@/features/region/regionSource";
 import { useRegion } from "@/features/region/regionStore";
 import { useScanResult } from "@/features/scan/scanResult";
 import { useScanSettings, type ScanMode } from "@/features/scan/scanSettings";
 import { Wordmark } from "@/ui/Wordmark";
 import { confirmDestructive, notify } from "@/ui/dialogs";
-import { accent, FONT, radii, useTheme, type ThemePreference } from "@/ui/theme";
+import { FONT, radii, TYPE, useTheme, type ThemePreference } from "@/ui/theme";
 import { useToast } from "@/ui/toast";
 
 // Light first: it's the brand's primary mode.
@@ -43,20 +40,12 @@ const SCAN_MODES: { name: ScanMode; label: string }[] = [
 ];
 
 export default function SettingsScreen() {
-  const { theme, name, preference, setPreference } = useTheme();
+  const { theme, preference, setPreference } = useTheme();
   const { scanMode, setScanMode } = useScanSettings();
-  const { rules, selectedId, catalog } = useRegion();
+  const { rules } = useRegion();
   const { showResult } = useScanResult();
   const { showError } = useToast();
-  const router = useRouter();
   const db = useSQLiteContext();
-
-  // Falls back to the rules' own location_path when the catalog hasn't loaded the
-  // matching entry yet — the rules are always present, the index isn't.
-  const selected = catalog.find((entry) => entry.id === selectedId);
-  const regionParents = selected
-    ? regionSubtitle(selected)
-    : rules.location_path.slice(0, -1).reverse().join(", ");
 
   const confirmClearHistory = () => {
     confirmDestructive({
@@ -114,8 +103,8 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={["top"]}>
       <View style={styles.header}>
-        <Wordmark size={15} />
-        <Text style={[styles.heading, { color: theme.text }]}>Settings</Text>
+        <Wordmark />
+        <Text style={[TYPE.h2, { color: theme.text }]}>Settings</Text>
       </View>
 
       {/* Scrolls: the section list is already taller than a small phone with the keyboard
@@ -125,42 +114,10 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.body}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Region</Text>
-        {/* Page-wide: the whole card is the tap target, unlike the outlined action
-            buttons below, because pressing it navigates rather than acting in place. The
-            picker itself now hosts location detection, at the top of its list. */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.card,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            pressed && { backgroundColor: theme.bgInput },
-          ]}
-          onPress={() => router.push("/region")}
-          accessibilityRole="button"
-          accessibilityLabel={`Region, currently ${getRegionName(rules)}`}
-        >
-          <Text style={[styles.rowLabel, { color: theme.textBody }]}>Region</Text>
-          <View style={styles.rowValue}>
-            <View style={styles.rowValueText}>
-              <Text style={[styles.rowValueName, { color: theme.text }]} numberOfLines={1}>
-                {getRegionName(rules)}
-              </Text>
-              {regionParents !== "" && (
-                <Text style={[styles.rowValueSub, { color: theme.textMuted }]} numberOfLines={1}>
-                  {regionParents}
-                </Text>
-              )}
-            </View>
-            <Text style={[styles.chevron, { color: theme.textSubtle }]}>›</Text>
-          </View>
-        </Pressable>
-
-        <Text style={[styles.sectionLabel, { color: theme.textMuted }, styles.sectionSpacer]}>
-          Appearance
-        </Text>
-        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-          <Text style={[styles.rowLabel, { color: theme.textBody }]}>Mode</Text>
-          <View style={[styles.segment, { backgroundColor: theme.bgInput }]}>
+        <Text style={[styles.sectionLabel, { color: theme.text2 }]}>Appearance</Text>
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.line }]}>
+          <Text style={[styles.rowLabel, { color: theme.text }]}>Mode</Text>
+          <View style={[styles.segment, { backgroundColor: theme.surface }]}>
             {MODES.map((mode) => {
               // Tracks what was chosen, not what it resolved to: with "system" active
               // on a dark phone, "System" highlights — not "Dark".
@@ -171,8 +128,8 @@ export default function SettingsScreen() {
                   style={[
                     styles.segmentButton,
                     active && {
-                      backgroundColor: theme.segmentActiveBg,
-                      borderColor: theme.segmentActiveBorder,
+                      backgroundColor: theme.card,
+                      borderColor: theme.line,
                       borderWidth: 1,
                     },
                   ]}
@@ -182,8 +139,8 @@ export default function SettingsScreen() {
                     style={[
                       styles.segmentText,
                       {
-                        fontFamily: active ? FONT.utilityStrong : FONT.utility,
-                        color: active ? accent[name] : theme.textMuted,
+                        fontFamily: FONT.bodyStrong,
+                        color: active ? theme.accentInk : theme.text2,
                       },
                     ]}
                   >
@@ -195,11 +152,11 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <Text style={[styles.sectionLabel, { color: theme.textMuted }, styles.sectionSpacer]}>
+        <Text style={[styles.sectionLabel, { color: theme.text2 }, styles.sectionSpacer]}>
           Scanning
         </Text>
-        <View style={[styles.stackCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-          <View style={[styles.segment, { backgroundColor: theme.bgInput }]}>
+        <View style={[styles.stackCard, { backgroundColor: theme.card, borderColor: theme.line }]}>
+          <View style={[styles.segment, { backgroundColor: theme.surface }]}>
             {SCAN_MODES.map((mode) => {
               const active = scanMode === mode.name;
               return (
@@ -208,8 +165,8 @@ export default function SettingsScreen() {
                   style={[
                     styles.segmentButtonWide,
                     active && {
-                      backgroundColor: theme.segmentActiveBg,
-                      borderColor: theme.segmentActiveBorder,
+                      backgroundColor: theme.card,
+                      borderColor: theme.line,
                       borderWidth: 1,
                     },
                   ]}
@@ -219,8 +176,8 @@ export default function SettingsScreen() {
                     style={[
                       styles.segmentText,
                       {
-                        fontFamily: active ? FONT.utilityStrong : FONT.utility,
-                        color: active ? accent[name] : theme.textMuted,
+                        fontFamily: FONT.bodyStrong,
+                        color: active ? theme.accentInk : theme.text2,
                       },
                     ]}
                   >
@@ -230,30 +187,30 @@ export default function SettingsScreen() {
               );
             })}
           </View>
-          <Text style={[styles.rowHint, { color: theme.textMuted }]}>
+          <Text style={[styles.rowHint, { color: theme.text2 }]}>
             {scanMode === "continuous"
               ? "Scans on its own — points the camera at an item and shows the result once it's confident. Heavier on the camera."
               : "Identifies an item only when you tap. Lighter, so the preview stays smooth."}
           </Text>
         </View>
 
-        <Text style={[styles.sectionLabel, { color: theme.textMuted }, styles.sectionSpacer]}>
+        <Text style={[styles.sectionLabel, { color: theme.text2 }, styles.sectionSpacer]}>
           Data
         </Text>
-        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-          <Text style={[styles.rowLabel, { color: theme.textBody }]}>Clear sort history</Text>
-          {/* Neutral, not a warning color: the brand has no destructive token, and
-              clay is reserved for the garbage bin indicator. */}
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.line }]}>
+          <Text style={[styles.rowLabel, { color: theme.text }]}>Clear sort history</Text>
+          {/* Neutral, not a warning colour: the sheet's only red is the error banner, and
+              a button that reads as an error would overstate what "Clear" does. */}
           <Pressable
             style={({ pressed }) => [
               styles.actionButton,
-              { borderColor: theme.cardBorder },
-              pressed && { backgroundColor: theme.bgInput },
+              { borderColor: theme.lineStrong },
+              pressed && { backgroundColor: theme.surface },
             ]}
             onPress={confirmClearHistory}
             hitSlop={8}
           >
-            <Text style={[styles.rowAction, { color: theme.textMuted }]}>Clear</Text>
+            <Text style={[styles.rowAction, { color: theme.text }]}>Clear</Text>
           </Pressable>
         </View>
 
@@ -263,20 +220,20 @@ export default function SettingsScreen() {
             style={[
               styles.card,
               styles.stackedRow,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder },
+              { backgroundColor: theme.card, borderColor: theme.line },
             ]}
           >
-            <Text style={[styles.rowLabel, { color: theme.textBody }]}>Seed 20 test scans</Text>
+            <Text style={[styles.rowLabel, { color: theme.text }]}>Seed 20 test scans</Text>
             <Pressable
               style={({ pressed }) => [
                 styles.actionButton,
-                { borderColor: theme.cardBorder },
-                pressed && { backgroundColor: theme.bgInput },
+                { borderColor: theme.lineStrong },
+                pressed && { backgroundColor: theme.surface },
               ]}
               onPress={runSeed}
               hitSlop={8}
             >
-              <Text style={[styles.rowAction, { color: theme.textMuted }]}>Seed</Text>
+              <Text style={[styles.rowAction, { color: theme.text }]}>Seed</Text>
             </Pressable>
           </View>
         )}
@@ -289,24 +246,24 @@ export default function SettingsScreen() {
               style={[
                 styles.card,
                 styles.stackedRow,
-                { backgroundColor: theme.card, borderColor: theme.cardBorder },
+                { backgroundColor: theme.card, borderColor: theme.line },
               ]}
             >
-              <Text style={[styles.rowLabel, { color: theme.textBody }]}>Test backend report</Text>
+              <Text style={[styles.rowLabel, { color: theme.text }]}>Test backend report</Text>
               <Pressable
                 style={({ pressed }) => [
                   styles.actionButton,
-                  { borderColor: theme.cardBorder },
-                  pressed && { backgroundColor: theme.bgInput },
+                  { borderColor: theme.lineStrong },
+                  pressed && { backgroundColor: theme.surface },
                 ]}
                 onPress={testBackendReport}
                 hitSlop={8}
               >
-                <Text style={[styles.rowAction, { color: theme.textMuted }]}>Send</Text>
+                <Text style={[styles.rowAction, { color: theme.text }]}>Send</Text>
               </Pressable>
             </View>
             {backendResult != null && (
-              <Text style={[styles.rowHint, { color: theme.textMuted }, styles.detectedNote]}>
+              <Text style={[styles.rowHint, { color: theme.text2 }, styles.detectedNote]}>
                 {backendResult}
               </Text>
             )}
@@ -324,28 +281,28 @@ export default function SettingsScreen() {
           style={[
             styles.card,
             styles.stackedRow,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
+            { backgroundColor: theme.card, borderColor: theme.line },
           ]}
         >
-          <Text style={[styles.rowLabel, { color: theme.textBody }]}>Sort a random item</Text>
+          <Text style={[styles.rowLabel, { color: theme.text }]}>Sort a random item</Text>
           <Pressable
             style={({ pressed }) => [
               styles.actionButton,
-              { borderColor: theme.cardBorder },
-              pressed && { backgroundColor: theme.bgInput },
+              { borderColor: theme.lineStrong },
+              pressed && { backgroundColor: theme.surface },
             ]}
             onPress={sortRandomItem}
             hitSlop={8}
           >
-            <Text style={[styles.rowAction, { color: theme.textMuted }]}>Sort</Text>
+            <Text style={[styles.rowAction, { color: theme.text }]}>Sort</Text>
           </Pressable>
         </View>
-        <Text style={[styles.rowHint, { color: theme.textMuted }, styles.detectedNote]}>
+        <Text style={[styles.rowHint, { color: theme.text2 }, styles.detectedNote]}>
           Shows a real result from this region&apos;s rules, and logs it to history — the
           camera can&apos;t yet, since the bundled model doesn&apos;t know item names.
         </Text>
 
-        <Text style={[styles.note, { color: theme.textMuted }]}>
+        <Text style={[styles.note, { color: theme.text2 }]}>
           Preferences and support settings are not yet available.
         </Text>
       </ScrollView>
@@ -355,71 +312,55 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 12 },
-  heading: { fontFamily: FONT.heading, fontSize: 26, letterSpacing: -0.4, marginTop: 4 },
+  header: { paddingHorizontal: 22, paddingTop: 10, paddingBottom: 14, gap: 14 },
   scroll: { flex: 1 },
   // Bottom padding clears the tab bar — the last row would otherwise sit under it with
   // nothing left to scroll.
-  body: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 48 },
-  sectionLabel: {
-    fontFamily: FONT.utility,
-    fontSize: 10,
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-    marginBottom: 10,
-  },
+  body: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 48 },
+  sectionLabel: { ...TYPE.micro, marginBottom: 10 },
   card: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderRadius: radii.card,
+    borderRadius: radii.lg,
     borderWidth: 1,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+    paddingHorizontal: 17,
+    paddingVertical: 15,
   },
   sectionSpacer: { marginTop: 28 },
   /** A second (or third) card inside one section, under the first. */
   stackedRow: { marginTop: 10 },
   /** An explanatory or confirmation line sitting under the card it belongs to. */
   detectedNote: { marginTop: 8, paddingHorizontal: 4 },
-  rowLabel: { fontFamily: FONT.body, fontSize: 14 },
-  // The value side of a navigation row: name over its parent path, then the chevron.
-  rowValue: { flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 1 },
-  rowValueText: { alignItems: "flex-end", flexShrink: 1 },
-  rowValueName: { fontFamily: FONT.bodyEmphasis, fontSize: 14 },
-  rowValueSub: { fontFamily: FONT.utility, fontSize: 10, letterSpacing: 0.4, marginTop: 2 },
-  chevron: { fontFamily: FONT.body, fontSize: 20, lineHeight: 22 },
-  rowAction: {
-    fontFamily: FONT.utilityStrong,
-    fontSize: 11,
-    letterSpacing: 0.4,
-  },
+  rowLabel: { ...TYPE.row },
+  rowAction: { ...TYPE.button, fontSize: 14, lineHeight: 18 },
   // The button, not the whole card, is the tap target now that it's outlined —
-  // an outline that isn't the thing you press reads as a lie.
+  // an outline that isn't the thing you press reads as a lie. Secondary-button styling.
   actionButton: {
     borderWidth: 1,
-    borderRadius: radii.button,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    borderRadius: radii.chip,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   // Vertical card: a full-width control stacked above its explanatory hint.
   stackCard: {
-    borderRadius: radii.card,
+    borderRadius: radii.lg,
     borderWidth: 1,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+    paddingHorizontal: 17,
+    paddingVertical: 15,
     gap: 12,
   },
+  // A surface-coloured track holding pill segments; the selected one is raised to card.
   segment: {
     flexDirection: "row",
-    borderRadius: radii.button,
+    borderRadius: radii.chip,
     padding: 3,
     gap: 3,
   },
   segmentButton: {
     paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: radii.button,
+    paddingVertical: 7,
+    borderRadius: radii.chip,
     borderWidth: 1,
     borderColor: "transparent",
   },
@@ -428,21 +369,12 @@ const styles = StyleSheet.create({
   segmentButtonWide: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 8,
-    borderRadius: radii.button,
+    paddingVertical: 9,
+    borderRadius: radii.chip,
     borderWidth: 1,
     borderColor: "transparent",
   },
-  segmentText: { fontSize: 11, letterSpacing: 0.4 },
-  rowHint: {
-    fontFamily: FONT.body,
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  note: {
-    fontFamily: FONT.body,
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 16,
-  },
+  segmentText: { ...TYPE.tag, fontSize: 13, lineHeight: 16 },
+  rowHint: { ...TYPE.small },
+  note: { ...TYPE.small, marginTop: 16 },
 });

@@ -11,17 +11,20 @@ find-and-replace.
 ```
 app/                 expo-router routes. The file tree IS the navigation graph.
   _layout.tsx          root: fonts, theme state, provider stack, global overlays
-  region.tsx           full-screen region picker (pushed from Settings, not a tab)
+  add-place.tsx        add/edit a place: label + region catalog (pushed from the Location tab)
   item.tsx             full-screen item result (pushed from Search, not a tab)
-  (tabs)/              the four-tab shell: index=Scan, history, search, settings
+  (tabs)/              the five-tab shell: region=Location home, history, index=Scan, search, settings
 
 features/
   region/            which rules are in use, and where they came from
     regionSource.ts    URLs, schema parsing/validation, AsyncStorage cache, bundled fallback
     regionStore.tsx    RegionProvider — the active region, downloads, refresh
+    placesStore.tsx    PlacesProvider — saved places ("Home", "Work") pinned to regions
+    PlacesSheet.tsx    the places dropdown (bottom sheet) raised from the location chip
     regionData.ts      pure lookups over one region's rules
     location.ts        GPS → reverse geocode → catalog match
-    RegionIcons.tsx    download-state glyphs for the picker
+    regionInfo.ts      per-region notices + plastic-code verdicts, read from the active rules
+    LocationChip.tsx   the header pill showing the active place; opens PlacesSheet
 
   search/            look an item up by name (the manual counterpart to scan)
     searchItems.ts     pure ranked text search over one region's items
@@ -40,8 +43,12 @@ features/
     devSeed.ts         dev-only backdated rows for testing date rendering
 
 ui/                  the design system and app-wide chrome
-  brand.ts             raw brand tokens; mirrors docs/design/branding/theme.ts
-  theme.ts             semantic light/dark themes — the single import site for components
+  brand.ts             raw design-sheet tokens; mirrors docs/design/branding/theme.ts
+  theme.ts             semantic light/dark Theme (incl. per-bin swatches) + TYPE scale — the
+                       single import site for components
+  Button.tsx           the three pills: primary / secondary / ghost
+  Lid.tsx              the lid-bar motif (Lid, LidStack) — the system's only illustration
+  Icons.tsx            functional glyphs (search, camera, chevrons, close, check, info, …)
   toast.tsx            error-banner state
   ErrorToast.tsx       error-banner rendering
   dialogs.ts           Alert wrappers (react-native-web's Alert is a silent no-op)
@@ -51,7 +58,7 @@ ui/                  the design system and app-wide chrome
 core/                feature-agnostic primitives, no React
   net.ts               the one fetch wrapper (RN fetch has no timeout of its own)
   storage.ts           typed JSON wrapper over AsyncStorage + the key namespace
-  bins.ts              the bin vocabulary, defined by bingoDB — labels and colours
+  bins.ts              the bin vocabulary, defined by bingoDB — types and labels (colour is on the Theme)
 ```
 
 ## Rules of thumb

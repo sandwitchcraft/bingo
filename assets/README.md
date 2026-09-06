@@ -5,7 +5,8 @@ Everything here is compiled into the app binary. Imported through the `@/assets/
 `metro.config.js` — Metro won't bundle a `.tflite` or resolve a `.wasm` without that.
 
 ```
-data/                 offline fallback copies of region rules
+data/                 offline fallback copies of bingoDB files
+  items.json                        the global item registry (names, keywords, materials)
   canada/ontario/toronto/toronto.json
 models/
   efficientnet-lite0-int8.tflite   the on-device classifier (bundled)
@@ -14,13 +15,15 @@ models/
 ## `data/` — why the deep folder path
 
 The nesting is **not** organizational: it mirrors bingoDB's published layout exactly
-(`<country>/<province>/<region>/<region>.json`), so a bundled file and a fetched one are
-addressed the same way. Do not flatten it.
+(`items.json` at the root, `<country>/<province>/<region>/<region>.json` below), so a
+bundled file and a fetched one are addressed the same way. Do not flatten it.
 
-`toronto.json` is a **verbatim snapshot of the live file**, not a separately maintained
-copy. Rules come from bingoDB at runtime; this exists only so a first launch with no
-network is still useful. It is parsed by `parseRegionRules` like anything fetched —
-there is deliberately no second schema in the codebase.
+Both files are **verbatim snapshots of the live files**, not separately maintained copies.
+Rules and names come from bingoDB at runtime; these exist only so a first launch with no
+network is still useful. They are parsed by `parseRegionRules` / `parseItemRegistry` like
+anything fetched — there is deliberately no second schema in the codebase. They travel
+together: the region file stopped carrying `display_name` for registry keys, so a bundled
+Toronto without the bundled registry would show title-cased slugs.
 
 ## `models/efficientnet-lite0-int8.tflite` — the bundled model
 

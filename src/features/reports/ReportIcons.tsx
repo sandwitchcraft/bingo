@@ -5,9 +5,11 @@
  */
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 
+import { iconStroke } from "@/ui/theme";
+
 type IconProps = { size: number; color: string };
 
-const STROKE = 1.8;
+const STROKE = iconStroke;
 
 function Glyph({ size, color, children }: IconProps & { children: React.ReactNode }) {
   return (

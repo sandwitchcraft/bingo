@@ -1,115 +1,133 @@
-# Bin-go — Brand Implementation Guide
+# bin·go — Brand Implementation Guide
 
 Read this before implementing any UI. Two companion files sit alongside this one:
 
-- `design-tokens.json` — full machine-readable token spec (colors, type, radii, voice, exclusions)
+- `design-tokens.json` — full machine-readable token spec (colours, type, radii, lid, voice, exclusions)
 - `theme.ts` — ready-to-import React Native/Expo constants derived from the tokens above
+
+The source of truth for all of it is the approved design sheet **"bin-go Color and Type v3"**
+(claude.ai/design project `e72fe31c`). This guide is the sheet's rules in prose. It replaced
+the Sprout/Harbor/Clay + Manrope/Inter system on 2026-09-05.
 
 Never hardcode a hex value or font name in a component.
 
 **How this maps into the app.** `docs/design/branding/theme.ts` is mirrored at `src/ui/brand.ts`,
 which is the copy the app actually imports — the two must be kept identical, and the mirror
 is the thing most likely to rot, so change both together. `src/ui/theme.ts` layers the
-semantic light/dark themes on top of those raw tokens and re-exports everything, so
-components import only from `@/ui/theme` and never reach for `brand.ts` directly.
-
-Values that this guide fixes (the brand tokens) live in `brand.ts`. Values the brand leaves
-open — the lifted/recessed dark surfaces, hairlines, muted text — are *derived* in
-`theme.ts` and are marked as derived there. Don't promote a derived value to a token
-without deciding it's a brand decision.
+semantic light/dark `Theme` objects and the `TYPE` scale on top of those raw tokens and
+re-exports everything, so components import only from `@/ui/theme` and never reach for
+`brand.ts` directly. Shared pieces live next to it: `Button.tsx` (the three pills),
+`Lid.tsx` (the lid motif), `Icons.tsx` (the functional glyphs), `Wordmark.tsx`.
 
 ## Logo
 
-- Wordmark: **`bin·go`**, lowercase only, middle-dot separator (`·`), dot always colored `sprout` (`#39B378`).
-- No other casing (title case, sentence case), no hyphen separator, no icon/symbol mark. This was explicitly decided after comparing five variants, lowercase-with-dot is final.
+- Wordmark: **`bin·go`**, lowercase only, Bricolage Grotesque 700 tracked −0.03em, the
+  interpunct in the accent green. Render `<Wordmark />`; never type the string.
+- No other casing, no hyphen separator, no icon/symbol mark. If a real logo ever arrives it
+  goes in `assets/` and this section changes — do not draw one.
 
-## Color
+## Colour
 
-- **Sprout** (`#39B378`) / **Sprout Deep** (`#218A5A`): brand accent and primary buttons. Sprout Deep specifically for button backgrounds, it's calmer than raw Sprout.
-- **Harbor** (`#3E8BD6`): reserved for recycling bin indicators only. Do not reuse as a general UI accent.
-- **Clay** (`#D77930`): reserved for garbage indicators only. Deepened from the original
-  `#DB7B31`, which missed the AA contrast floor on paper (see **Contrast** below).
-- **Ink** (`#141A18`): dark mode background, light mode text. Deepened from the original
-  `#1E2B27`, which was a dark *green* (`hsl(162°, 18%, 14%)`) and read as such across a full
-  screen. Ink's hue is still green, just far darker, so on dark it must be used as the
-  background *itself* — lifting it to separate a surface reads as green again. Separate
-  surfaces with hairlines, or recess below ink.
-- **Slate** (`#5B6B66`): secondary/muted text, and the consult-local-guide indicator.
-  Consult is a deferral rather than a disposal outcome, so it reads neutral and must not
-  share garbage's clay.
-- **Paper** (`#FAFAF8`): light mode background.
+**One warm palette at two lightnesses.** The ground is cream (`#F5EAD8`) with warm ink
+(`#211F1A`); dark mode is warm umber (`#191712`) with sand ink (`#F4ECDC`). The cream darkens
+without ever cooling into grey. Every semantic token exists in both modes — read them off the
+`Theme` object (`theme.bg`, `theme.card`, `theme.accent`, …), never from the palette.
 
-Bin-outcome colors should always be looked up via the `binColors` map in `theme.ts`, not hardcoded per-screen, so a color change only needs to happen in one place.
+**Green does double duty.** It is the app accent — every button, toggle, active state and
+confirmation — *and* it is the organics lid. **Blue, black and amber appear only as an
+answer**, so a colour on screen always means a bin. Don't use blue for a link or amber for a
+warning.
 
-### Contrast
+**Bins have four colours each**, on `theme.bins[bin]`:
 
-Bin colors are **indicators**, not text colors. They may carry a badge, a hairline, a tint,
-or a large label (the item name at 26px ExtraBold, the bin label at 20px Bold). They must
-never colour body copy or a 10px eyebrow — those use the theme's text tokens, which is why
-`binColors` deliberately has no "text" variant.
+| | `fill` | `ink` | `tint` | `tintInk` |
+|---|---|---|---|---|
+| use for | the answer card, a lid bar | text on the fill | chips, notes, list rows | text on the tint |
 
-That split exists because a saturated mid-tone can't clear the AA floor for normal text
-(4.5:1) against either background without going so dark it stops reading as itself. As
-large text (≥24px, or ≥18.66px bold) the floor is **3.0:1**, which every bin colour now
-clears in both themes:
+In dark mode every fill lifts to its lighter step so the answer card takes dark ink instead of
+white. `BIN_ROLE` in `brand.ts` maps bingoDB's `BinType` onto the sheet's four lid roles:
+compost → green, recycling → blue, garbage → black, consult-local-guide → amber (the sheet's
+"take-back / answer + caution" role — batteries, bulbs, depot glass — which is exactly what
+the deferral covers).
 
-| Outcome | Colour | on Paper | on Ink |
-|---|---|---|---|
-| Recycling | Harbor `#3E8BD6` | 3.42:1 | 4.93:1 |
-| Compost | Sprout Deep `#218A5A` | 4.15:1 | 4.07:1 |
-| Garbage | Clay `#D77930` | 3.01:1 | 5.60:1 |
-| Consult | Slate `#5B6B66` | 5.37:1 | 3.14:1 |
+**Alert** (`#B5432B`) is the one colour not on the sheet: the error toast and swipe-to-remove.
+It exists because amber is now a bin and an error must never read as a sorting outcome. Same
+fill in both themes.
 
-Two of those numbers are why tokens moved: Clay's original `#DB7B31` sat at 2.92:1 on paper,
-and Slate sat at 2.62:1 against the original Ink.
-
-**Re-measure this table before changing Clay, Slate, Ink, or Paper.** Headroom above the
-floor is thin and unevenly distributed:
-
-- **Clay: +0.01** — passing by the smallest possible margin. Any lightening of Clay, or any
-  darkening of Paper, drops it below 3.0:1. Treat `#D77930` as a hard floor, not a
-  preference; if Clay must get warmer or lighter, the item name has to stop carrying the
-  outcome colour on light.
-- **Slate: +0.14** — depends on Ink staying at or below `#141A18`. Lightening Ink breaks it.
-- Recycling (+0.42) and Compost (+1.07) have real room.
-
-Light mode is the binding constraint for warm colours; dark mode binds the neutrals. A
-change that looks safe in one theme routinely breaks the other, so check both.
+**The scan screen is permanently dark** in both themes (`scanSurface` in `brand.ts`): umber
+ground, sand text, a lifted-green reticle and shutter, a single cream "Looks like" card.
 
 ## Typography
 
-Three families, each with one job:
-- **Manrope** (800/700) — display and headings only.
-- **Inter** (400/600) — body copy only.
-- **IBM Plex Mono** (500/600) — every label, eyebrow, timestamp, or metadata string. There is no separate "label" style in Inter, this was consolidated during design review, Mono covers all utility text.
+Three faces, each with one job:
+
+- **Bricolage Grotesque** (700 / 600) — display and titles. The one-word answer at 50px,
+  screen titles at 32px, list titles at 17px, and **every button label**. Always negatively
+  tracked. Its slightly irregular shapes keep the system warm without being cuddly.
+- **Hanken Grotesk** (400 / 500 / 600) — all prose, rules, rows, chips.
+- **IBM Plex Mono** (400) — **only** data quoted from a rulebook: provenance stamps, dates,
+  hex codes, section eyebrows. Uppercase, tracked out, 10–12px. Body copy is never mono.
+
+Use the `TYPE` presets in `theme.ts` (`TYPE.answer`, `TYPE.h2`, `TYPE.row`, `TYPE.micro`, …)
+rather than composing sizes by hand — they carry the tracking pre-multiplied.
+
+## Layout & shape
+
+Left-aligned, flush-left, whitespace on the right. **Over-rounded**: rows and notes 18,
+cards 24, the answer card 28, sheets 34, every button and chip a full pill. Never a sharp
+corner. Content stacks in one column with 18–20 gaps; a screen's primary action pins to the
+bottom with the rulebook stamp under it.
+
+**Elevation.** One soft warm shadow, reserved for things that represent a device screen or a
+modal (the result sheet, the report sheet). Everything else is separated by a 1px `line`
+(16% ink) or `lineStrong` (26%) — inputs and secondary buttons take the strong line, dashed
+for "use my location". No inner shadows, no glows, no blur.
+
+## The lid motif
+
+A bin is drawn as a rounded vertical bar in its lid colour (`<Lid bin={…} />`); a row of them
+describes a region's bin set (`<LidStack bins={…} />`). **This is the only illustration in the
+system** — no bin drawings, no icons of trash, no mascots. It leads every item row, the
+location chip, and the guide row under an answer.
+
+## Icons
+
+Lucide shapes at stroke 2.4, 14–20px, `currentColor`, in `src/ui/Icons.tsx`. Only functional
+glyphs: search, camera, chevrons, close, plus, check, info, external, locate. No filled
+icons, no icon fonts, no emoji.
 
 ## Components
 
-- Buttons are **full pill shape** (`border-radius: 999`), not rounded rectangles.
-- Primary button uses Sprout Deep, not raw Sprout, intentionally toned down from an earlier brighter version.
-- Secondary button uses a soft tinted fill (`rgba(57,179,120,0.10)`), not an outline, per design feedback that outlined buttons read as "foreboding."
-- Cards use `18px` border radius, `1px` border in `line` color (`#E7E5DE`).
-
-## Pictograms
-
-- Single-weight line icons (~1.8px stroke), no fill except a circular background badge.
-- Badge is tinted at ~14-16% opacity of the **bin outcome color**, not a fixed material color, e.g. a plastic bottle's badge is tinted Harbor (recycling), not "plastic blue" as an independent color choice. This lets the icon teach the sort result at a glance.
+- **Buttons** (`Button.tsx`): `primary` = accent fill / `onAccent` text; `secondary` =
+  transparent with a `lineStrong` hairline; `ghost` = bare `accentStrong` text. Pressed moves
+  one step along the ramp (`accentStrong`, `surface`, `accentTint` respectively). Disabled is
+  45% opacity. Labels are Bricolage 600.
+- **The answer card** (`ResultView.tsx`): the bin's `fill` with its `ink`, "Goes in" in mono
+  micro at 80% opacity, the bin name in `TYPE.answer`, a 22%-white chip for the place.
+- **Item rows**: lid · name (Hanken 500 / 15) · bin name (Bricolage 600 / 13 in `tintInk`).
+- **The location chip** (`LocationChip.tsx`): a `surface` pill with a green lid, the place's
+  name, a chevron. It sits in the header of every screen that gives an answer, because the
+  place changes every answer below it.
 
 ## Voice
 
-Instructional and direct. No exclamation points, no congratulatory filler.
-- Use: `"Rinse before disposal."` / `"Item not recognized. Try a clearer angle."` / `"Scanned. Saved to history."`
-- Avoid: `"Give it a quick rinse first!"` / `"Oops, we couldn't recognize that."` / `"Great job scanning your first item!"`
+Calm, second-person, specific. Reassurance comes from naming the bin, not from tone.
+
+- **Order is fixed: bin → reason → exception.**
+- **Sentence case everywhere.** Uppercase only in mono stamps.
+- **You, not we.**
+- **Uncertainty is stated plainly** as a named condition, never hedged ("probably", "we think").
+- **No exclamation marks, no emoji, no mascot, no puns on the name.**
+
+Yes: *"Green bin. Greasy card can't be recycled here."*
+No: *"Oops! That's a tricky one 🤔"*
 
 ## Explicitly excluded
 
-These were tried and rejected during design iteration, do not reintroduce them:
-- Stamp/badge motifs on the result screen
-- Any "bingo" game visual references (cards, grids, dabbers) despite the app name
-- Amber/yellow as an accent color
-- Scan-line or beacon sweep animations
-- Mascot or illustrated characters
-
-## Reference mood
-
-Closer to Yuka (calm, light, single-accent-driven, credible-but-friendly) than to municipal signage or a gamified habit-tracker. Light mode is primary; dark mode is a supported secondary, not the default.
+- Gradients, photography, patterns (the viewfinder stripe is the one exception)
+- Sharp corners; hairline-only geometric motifs
+- Drawings or icons of bins/trash, mascots, illustrated characters
+- Blur, frosted glass, inner shadows, glows
+- Blue, black or amber anywhere that isn't a bin answer
+- Bingo/game references (cards, grids, dabbers) despite the name
+- Entrance animations, bounce, parallax — motion is 120–140ms colour/position only

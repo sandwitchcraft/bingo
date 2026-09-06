@@ -35,13 +35,13 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BIN_LABEL, binColor, type BinType } from "@/core/bins";
+import { BIN_LABEL, type BinType } from "@/core/bins";
 import { getRegionPath, resolveScanResult } from "@/features/region/regionData";
 import { useRegionRules } from "@/features/region/regionStore";
 import { submitReport } from "@/features/reports/reports";
 import { useReport, type ReportTarget } from "@/features/reports/reportStore";
 import { CameraIcon, CheckIcon, RecyclingBoxIcon } from "@/features/reports/ReportIcons";
-import { colors, FONT, radii, useTheme } from "@/ui/theme";
+import { FONT, radii, TYPE, useTheme } from "@/ui/theme";
 import { useToast } from "@/ui/toast";
 
 type Step = "choice" | "form" | "success";
@@ -50,7 +50,7 @@ type ReportType = "wrong_bin" | "wrong_item";
 // The corrections a user can pick, including `consult-local-guide` — sometimes the right answer
 // really is "the app shouldn't claim a bin for this." The currently-shown bin is filtered out
 // below, since reporting it as wrong means it isn't the fix.
-const CORRECT_BINS: BinType[] = ["recycling", "compost", "garbage", "consult-local-guide"];
+const CORRECT_BINS: BinType[] = ["compost", "recycling", "garbage", "consult-local-guide"];
 
 const EASING = Easing.bezier(0.32, 0.72, 0, 1);
 
@@ -178,8 +178,8 @@ export function ReportSheet() {
           style={[
             styles.sheet,
             {
-              backgroundColor: theme.bgAlt,
-              borderColor: theme.cardBorder,
+              backgroundColor: theme.card,
+              borderColor: theme.line,
               paddingBottom: insets.bottom + 28,
             },
             sheetStyle,
@@ -187,31 +187,31 @@ export function ReportSheet() {
         >
           <GestureDetector gesture={pan}>
             <View style={styles.handleZone}>
-              <View style={[styles.grabber, { backgroundColor: theme.handleBar }]} />
+              <View style={[styles.grabber, { backgroundColor: theme.lineStrong }]} />
             </View>
           </GestureDetector>
 
           {result && step === "choice" && (
             <Animated.View entering={FadeIn.duration(160)} style={styles.body}>
-              <Text style={[styles.title, { color: theme.text }]}>What&apos;s incorrect?</Text>
+              <Text style={[styles.title, { color: theme.text }]}>What&apos;s wrong?</Text>
 
               <Pressable
                 style={({ pressed }) => [
                   styles.option,
-                  { backgroundColor: theme.card, borderColor: theme.cardBorder },
-                  pressed && { backgroundColor: theme.bgInput },
+                  { backgroundColor: theme.card, borderColor: theme.line },
+                  pressed && { backgroundColor: theme.surface },
                 ]}
                 onPress={() => chooseType("wrong_bin")}
                 accessibilityRole="button"
               >
-                <RecyclingBoxIcon size={26} color={colors.slate} />
+                <RecyclingBoxIcon size={26} color={theme.text2} />
                 <View style={styles.optionText}>
                   <Text style={[styles.optionTitle, { color: theme.text }]}>
-                    Incorrect Bin Placement
+                    Wrong bin
                   </Text>
-                  <Text style={[styles.optionSub, { color: theme.textMuted }]}>
+                  <Text style={[styles.optionSub, { color: theme.text2 }]}>
                     This item doesn&apos;t belong in{" "}
-                    <Text style={{ fontFamily: FONT.bodyEmphasis, color: binColor(shownBin) }}>
+                    <Text style={{ fontFamily: FONT.bodyStrong, color: theme.bins[shownBin].tintInk }}>
                       {BIN_LABEL[shownBin]}
                     </Text>
                     .
@@ -223,19 +223,19 @@ export function ReportSheet() {
                 <Pressable
                   style={({ pressed }) => [
                     styles.option,
-                    { backgroundColor: theme.card, borderColor: theme.cardBorder },
-                    pressed && { backgroundColor: theme.bgInput },
+                    { backgroundColor: theme.card, borderColor: theme.line },
+                    pressed && { backgroundColor: theme.surface },
                   ]}
                   onPress={() => chooseType("wrong_item")}
                   accessibilityRole="button"
                 >
-                  <CameraIcon size={26} color={colors.slate} />
+                  <CameraIcon size={26} color={theme.text2} />
                   <View style={styles.optionText}>
                     <Text style={[styles.optionTitle, { color: theme.text }]}>
-                      Misidentified object scan
+                      Wrong item
                     </Text>
-                    <Text style={[styles.optionSub, { color: theme.textMuted }]}>
-                      The scanner got the object/material wrong.
+                    <Text style={[styles.optionSub, { color: theme.text2 }]}>
+                      The scan named the wrong thing.
                     </Text>
                   </View>
                 </Pressable>
@@ -261,17 +261,17 @@ export function ReportSheet() {
               >
                 <Text style={[styles.formTitle, { color: theme.text }]}>Submit a report</Text>
 
-                <Text style={[styles.fieldLabel, { color: theme.textMuted }]}>Item</Text>
+                <Text style={[styles.fieldLabel, { color: theme.text2 }]}>Item</Text>
                 <Text style={[styles.itemName, { color: theme.text }]}>{result.display_name}</Text>
 
-                <Text style={[styles.fieldLabel, { color: theme.textMuted }]}>
+                <Text style={[styles.fieldLabel, { color: theme.text2 }]}>
                   Currently sorted into
                 </Text>
-                <Text style={[styles.shownBin, { color: binColor(shownBin) }]}>
+                <Text style={[styles.shownBin, { color: theme.bins[shownBin].tintInk }]}>
                   {BIN_LABEL[shownBin]}
                 </Text>
 
-                <Text style={[styles.fieldLabel, { color: theme.textMuted }]}>Correct bin</Text>
+                <Text style={[styles.fieldLabel, { color: theme.text2 }]}>Correct bin</Text>
                 <View style={styles.binRow}>
                   {binOptions.map((bin) => {
                     const selected = correctBin === bin;
@@ -281,15 +281,15 @@ export function ReportSheet() {
                         style={[
                           styles.binBtn,
                           {
-                            borderColor: selected ? colors.sprout : theme.cardBorder,
-                            backgroundColor: selected ? theme.secondaryBg : "transparent",
+                            borderColor: selected ? theme.bins[bin].fill : "transparent",
+                            backgroundColor: theme.bins[bin].tint,
                           },
                         ]}
                         onPress={() => setCorrectBin(bin)}
                         accessibilityRole="button"
                         accessibilityState={{ selected }}
                       >
-                        <Text style={[styles.binBtnText, { color: binColor(bin) }]}>
+                        <Text style={[styles.binBtnText, { color: theme.bins[bin].tintInk }]}>
                           {BIN_LABEL[bin]}
                         </Text>
                       </Pressable>
@@ -297,20 +297,20 @@ export function ReportSheet() {
                   })}
                 </View>
 
-                <Text style={[styles.fieldLabel, { color: theme.textMuted }]}>Notes</Text>
+                <Text style={[styles.fieldLabel, { color: theme.text2 }]}>Notes</Text>
                 <TextInput
                   style={[
                     styles.notes,
                     {
-                      backgroundColor: theme.bgInput,
-                      borderColor: theme.cardBorder,
+                      backgroundColor: theme.card2,
+                      borderColor: theme.line,
                       color: theme.text,
                     },
                   ]}
                   value={note}
                   onChangeText={setNote}
-                  placeholder="Anything else we should know?"
-                  placeholderTextColor={theme.textSubtle}
+                  placeholder="Anything else worth knowing?"
+                  placeholderTextColor={theme.text2}
                   multiline
                   textAlignVertical="top"
                 />
@@ -318,7 +318,7 @@ export function ReportSheet() {
                 <Pressable
                   style={[
                     styles.submit,
-                    { backgroundColor: theme.primary },
+                    { backgroundColor: theme.accent },
                     (!correctBin || submitting) && styles.submitDisabled,
                   ]}
                   onPress={handleSubmit}
@@ -327,14 +327,14 @@ export function ReportSheet() {
                   accessibilityState={{ disabled: !correctBin || submitting, busy: submitting }}
                 >
                   {submitting ? (
-                    <ActivityIndicator size="small" color={theme.primaryText} />
+                    <ActivityIndicator size="small" color={theme.onAccent} />
                   ) : (
-                    <Text style={[styles.submitText, { color: theme.primaryText }]}>Submit</Text>
+                    <Text style={[styles.submitText, { color: theme.onAccent }]}>Submit</Text>
                   )}
                 </Pressable>
 
-                <Text style={[styles.footnote, { color: theme.textMuted }]}>
-                  This data will be shared anonymously with bin·go
+                <Text style={[styles.footnote, { color: theme.text2 }]}>
+                  Sent anonymously to bin·go.
                 </Text>
               </ScrollView>
             </Animated.View>
@@ -343,11 +343,11 @@ export function ReportSheet() {
           {step === "success" && (
             <Animated.View entering={FadeIn.duration(200)} style={styles.success}>
               <Pressable onPress={close} style={styles.success} accessibilityRole="button">
-                <View style={[styles.checkDisc, { backgroundColor: theme.primary }]}>
-                  <CheckIcon size={44} color={theme.primaryText} />
+                <View style={[styles.checkDisc, { backgroundColor: theme.accent }]}>
+                  <CheckIcon size={44} color={theme.onAccent} />
                 </View>
                 <Text style={[styles.successText, { color: theme.text }]}>
-                  Thanks for submitting a report!
+                  Thanks. Your report is in.
                 </Text>
               </Pressable>
             </Animated.View>
@@ -361,92 +361,69 @@ export function ReportSheet() {
 const styles = StyleSheet.create({
   anchor: { flex: 1, justifyContent: "flex-end" },
   sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: radii.screen,
+    borderTopRightRadius: radii.screen,
     borderWidth: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: 22,
     maxHeight: "90%",
   },
   handleZone: { paddingTop: 10, paddingBottom: 12, alignItems: "center" },
   grabber: { width: 40, height: 4, borderRadius: 2 },
   body: { paddingTop: 4 },
-  title: {
-    fontFamily: FONT.heading,
-    fontSize: 22,
-    letterSpacing: -0.3,
-    marginBottom: 18,
-  },
+  title: { ...TYPE.h3, marginBottom: 18 },
   // The form's own heading: larger than the choice title, and tight to the first field —
   // the first field's own `marginTop` supplies the gap, so this carries almost no bottom margin.
-  formTitle: {
-    fontFamily: FONT.heading,
-    fontSize: 27,
-    letterSpacing: -0.4,
-    marginBottom: 2,
-  },
+  formTitle: { ...TYPE.h3, marginBottom: 2 },
   // Choice options
   option: {
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    borderRadius: radii.card,
+    borderRadius: radii.md,
     borderWidth: 1,
     paddingHorizontal: 16,
     paddingVertical: 16,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   optionText: { flex: 1, gap: 3 },
-  optionTitle: { fontFamily: FONT.bodyEmphasis, fontSize: 15 },
-  optionSub: { fontFamily: FONT.body, fontSize: 12.5, lineHeight: 18 },
+  optionTitle: { ...TYPE.title },
+  optionSub: { ...TYPE.small },
   // Form
-  fieldLabel: {
-    fontFamily: FONT.utility,
-    fontSize: 10,
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-    marginBottom: 6,
-    marginTop: 14,
-  },
-  itemName: { fontFamily: FONT.display, fontSize: 22, letterSpacing: -0.3 },
-  shownBin: { fontFamily: FONT.heading, fontSize: 18 },
-  // Corrected-bin buttons: bold, bin-coloured labels; the selected one gets a green highlight.
-  binRow: { flexDirection: "row", gap: 10 },
+  fieldLabel: { ...TYPE.micro, marginBottom: 6, marginTop: 16 },
+  itemName: { ...TYPE.h4 },
+  shownBin: { ...TYPE.title },
+  // Corrected-bin buttons: each in its bin's tint with its tint ink; the selected one takes
+  // the bin's full fill as its border.
+  binRow: { flexDirection: "row", gap: 8 },
   binBtn: {
     flex: 1,
-    borderRadius: radii.card,
-    borderWidth: 1,
+    borderRadius: radii.md,
+    borderWidth: 2,
     paddingVertical: 13,
     paddingHorizontal: 6,
     alignItems: "center",
     justifyContent: "center",
   },
-  // Centred so "Consult Local Guide" wrapping to two lines stays balanced; the row's default
+  // Centred so "Consult local guide" wrapping to two lines stays balanced; the row's default
   // stretch keeps the shorter siblings the same height.
-  binBtnText: { fontFamily: FONT.bodyEmphasis, fontSize: 14, textAlign: "center" },
+  binBtnText: { ...TYPE.rowBin, textAlign: "center" },
   notes: {
+    ...TYPE.note,
     minHeight: 84,
-    borderRadius: radii.card,
+    borderRadius: radii.md,
     borderWidth: 1,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    fontFamily: FONT.body,
-    fontSize: 14,
   },
   submit: {
-    borderRadius: radii.button,
-    paddingVertical: 15,
+    borderRadius: radii.chip,
+    paddingVertical: 16,
     alignItems: "center",
     marginTop: 24,
   },
   submitDisabled: { opacity: 0.45 },
-  submitText: { fontFamily: FONT.utilityStrong, fontSize: 13, letterSpacing: 0.4 },
-  footnote: {
-    fontFamily: FONT.body,
-    fontSize: 11.5,
-    lineHeight: 16,
-    textAlign: "center",
-    marginTop: 14,
-  },
+  submitText: { ...TYPE.title },
+  footnote: { ...TYPE.mono, textAlign: "center", marginTop: 14 },
   // Success
   success: { alignItems: "center", justifyContent: "center", paddingVertical: 40, gap: 20 },
   checkDisc: {
@@ -456,5 +433,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  successText: { fontFamily: FONT.heading, fontSize: 18, letterSpacing: -0.2, textAlign: "center" },
+  successText: { ...TYPE.title, textAlign: "center" },
 });

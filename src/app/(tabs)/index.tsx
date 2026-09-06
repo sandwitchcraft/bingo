@@ -31,7 +31,7 @@ import {
 } from "react-native-vision-camera";
 import { scheduleOnRN } from "react-native-worklets";
 
-import { formatItemName } from "@/features/region/regionData";
+import { LocationChip } from "@/features/region/LocationChip";
 import {
   AUTO_SCAN_THRESHOLD,
   INFERENCE_EVERY_N_FRAMES,
@@ -44,8 +44,9 @@ import {
 import { IMAGENET_LABELS } from "@/features/scan/imagenetLabels";
 import { useScanResult } from "@/features/scan/scanResult";
 import { useScanSettings } from "@/features/scan/scanSettings";
+import { Button } from "@/ui/Button";
 import { Wordmark } from "@/ui/Wordmark";
-import { colors, FONT, radii } from "@/ui/theme";
+import { radii, scanSurface, TYPE } from "@/ui/theme";
 
 // The bundled base model (EfficientNet-Lite0, ImageNet-1k, byte-quantized) — see
 // src/features/scan/classifier.ts for what it can and can't map onto region item keys.
@@ -53,17 +54,10 @@ import { colors, FONT, radii } from "@/ui/theme";
 // in metro.config.js.
 const MODEL_SOURCE = require("@/assets/models/efficientnet-lite0-int8.tflite");
 
-// The scan screen is a fixed dark environment regardless of app theme — it sits over
-// the camera feed, so it uses brand ink rather than the active theme's background.
-const SCAN_BG = colors.ink;
-const FRAME_IDLE = colors.paper;
-const FRAME_ACTIVE = colors.sprout;
-
-// Alpha overlays over the camera feed, as hex-alpha suffixes on the brand tokens so
-// they track a token change instead of drifting as loose rgba() literals.
-const RING_BORDER = `${colors.paper}33`; // paper 20%
-const TAP_LABEL = `${colors.paper}8C`; // paper 55%
-const RING_FILL = `${colors.sprout}26`; // sprout 15%
+// The scan screen is the one permanently dark surface in the product, in both themes — it
+// sits over the camera feed, so it takes `scanSurface` (the dark-mode tokens) rather than the
+// active theme. Its reticle, shutter and lid all read in the lifted dark-mode green.
+const SCAN_BG = scanSurface.bg;
 
 // Ask the camera pipeline for a small frame near the model's input size, so the per-frame
 // CPU copy the FrameConverter does is over a small buffer rather than a full-res one. It's
@@ -87,7 +81,7 @@ export default function ScanScreen() {
     return (
       <View style={[styles.container, styles.centered, { padding: 24 }]}>
         <Text style={styles.permissionText}>
-          Scanning needs the native camera — open the app on a device to scan. History and
+          Scanning needs the native camera. Open the app on a device to scan; History and
           Settings work here in the browser.
         </Text>
       </View>
@@ -351,10 +345,8 @@ function NativeScanScreen() {
   if (!hasPermission) {
     return (
       <View style={[styles.container, styles.centered, { padding: 24 }]}>
-        <Text style={styles.permissionText}>Camera access is required to scan items.</Text>
-        <Pressable style={styles.permissionButton} onPress={requestPermission}>
-          <Text style={styles.permissionButtonText}>Enable camera access</Text>
-        </Pressable>
+        <Text style={styles.permissionText}>Camera access is needed to scan items.</Text>
+        <Button label="Allow camera access" onPress={requestPermission} />
       </View>
     );
   }
@@ -362,7 +354,7 @@ function NativeScanScreen() {
   if (device == null) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <Text style={styles.loadingText}>Loading camera…</Text>
+        <Text style={styles.permissionText}>Starting camera…</Text>
       </View>
     );
   }
@@ -374,7 +366,7 @@ function NativeScanScreen() {
   // Tap mode only: fire a one-shot inference by bumping the capture generation, and let the
   // next serviced frame commit its result via reportTapResult. (Auto mode has no button — it
   // commits itself from reportDetection.)
-  const handleTapScan = () => {
+  const handleShutter = () => {
     if (scanning || !previewReady || !modelReady) return;
     setScanning(true);
     setCaptureGen((g) => g + 1);
@@ -390,7 +382,10 @@ function NativeScanScreen() {
       : !previewReady
         ? "Starting camera…"
         : null;
-  const cornerColor = scanning || detection != null ? FRAME_ACTIVE : FRAME_IDLE;
+
+  const shutterDisabled = statusPrefix != null || scanning;
+  // Only a not-ready state or an in-flight tap scan gets a label; a live camera says nothing.
+  const status = statusPrefix ?? (tapMode && scanning ? "Scanning…" : null);
 
   return (
     <View style={styles.container}>
@@ -408,72 +403,60 @@ function NativeScanScreen() {
         onPreviewStopped={() => setPreviewReady(false)}
       />
 
-      {previewReady && (
-        <View style={[styles.probe, { top: insets.top + 44 }]} pointerEvents="none">
-          <Text style={styles.probeText}>
+      {/* Header, matching the other tabs: wordmark left, the place chip right. The throughput
+          probe hangs under the chip as a mono stamp, dev builds only. */}
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
+        <View style={styles.headerRow} pointerEvents="box-none">
+          <Wordmark color={scanSurface.text} dotColor={scanSurface.reticle} />
+          <LocationChip onDark />
+        </View>
+        {__DEV__ && previewReady && (
+          <Text style={styles.probeText} pointerEvents="none">
             {fps == null ? "measuring…" : `${fps} fps`}
             {dropped > 0 ? `  ·  ${dropped} dropped` : ""}
           </Text>
-        </View>
-      )}
-
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Wordmark size={18} color={colors.paper} />
+        )}
       </View>
 
-      {/* Scan frame */}
+      {/* Reticle — four green corners, 3px, on a 12 radius. */}
       <View style={styles.frameWrap} pointerEvents="none">
         <View style={styles.frame}>
-          <View style={[styles.corner, styles.cornerTL, { borderColor: cornerColor }]} />
-          <View style={[styles.corner, styles.cornerTR, { borderColor: cornerColor }]} />
-          <View style={[styles.corner, styles.cornerBL, { borderColor: cornerColor }]} />
-          <View style={[styles.corner, styles.cornerBR, { borderColor: cornerColor }]} />
+          <View style={[styles.corner, styles.cornerTL]} />
+          <View style={[styles.corner, styles.cornerTR]} />
+          <View style={[styles.corner, styles.cornerBL]} />
+          <View style={[styles.corner, styles.cornerBR]} />
         </View>
       </View>
 
-      {/* Affordance. Tap mode: a shutter ring for a one-shot scan. Auto mode: no button —
-          a live readout of what the model sees as it homes in, then it fires on its own. */}
-      <View style={[styles.affordanceWrap, { bottom: insets.bottom + 40 }]}>
-        {tapMode ? (
-          scanning ? (
-            <Text style={styles.scanningLabel}>Scanning…</Text>
-          ) : (
-            // Dimmed rather than hidden while it can't be tapped: the control staying put
-            // means a premature tap lands on a no-op instead of on whatever would have
-            // reflowed into its place.
-            <Pressable
-              style={[styles.tapTarget, statusPrefix != null && styles.tapTargetWaiting]}
-              onPress={handleTapScan}
-              disabled={statusPrefix != null}
-              hitSlop={16}
-            >
-              <View style={styles.outerRing}>
-                <View style={styles.innerCircle} />
-              </View>
-              <Text style={styles.tapLabel}>{statusPrefix ?? "Tap to scan"}</Text>
-            </Pressable>
-          )
-        ) : (
-          <View style={styles.autoStatus} pointerEvents="none">
-            {statusPrefix == null && detection != null && (
-              // Confidence is shown next to the object on purpose while the base model
-              // stands in — it makes what the model actually saw legible, and shows the
-              // detection climbing toward the auto-fire threshold.
-              <Text style={styles.detectionSub}>{Math.round(detection.score * 100)}% confident</Text>
-            )}
-            <Text style={styles.tapLabel}>
-              {statusPrefix ??
-                (detection != null
-                  ? formatItemName(labelToItemKey(detection.label))
-                  : "Point at an item")}
-            </Text>
-          </View>
+      {/* Bottom cluster: a status line while not ready, and (tap mode) the shutter. No live
+          "looks like" card — the result sheet is the answer, and a guess before it only
+          competes with it. */}
+      <View style={[styles.bottom, { paddingBottom: insets.bottom + 16 }]} pointerEvents="box-none">
+        {status != null && <Text style={styles.status}>{status}</Text>}
+
+        {/* Tap mode only: a centred shutter for the one-shot scan. Auto mode has no button —
+            it commits on its own once a detection clears the threshold. */}
+        {tapMode && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.shutter,
+              { backgroundColor: pressed ? scanSurface.shutterPressed : scanSurface.shutter },
+              shutterDisabled && styles.shutterDisabled,
+            ]}
+            onPress={handleShutter}
+            disabled={shutterDisabled}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Scan"
+            accessibilityState={{ disabled: shutterDisabled, busy: scanning }}
+          />
         )}
       </View>
     </View>
   );
 }
+
+const RETICLE = 3;
 
 const styles = StyleSheet.create({
   container: {
@@ -483,29 +466,12 @@ const styles = StyleSheet.create({
   centered: {
     alignItems: "center",
     justifyContent: "center",
-  },
-  loadingText: {
-    fontFamily: FONT.body,
-    color: colors.paper,
-    fontSize: 14,
+    gap: 20,
   },
   permissionText: {
-    fontFamily: FONT.body,
-    color: colors.paper,
+    ...TYPE.bodySm,
+    color: scanSurface.text,
     textAlign: "center",
-    marginBottom: 20,
-    fontSize: 14,
-  },
-  permissionButton: {
-    backgroundColor: colors.sproutDeep,
-    paddingVertical: 14,
-    paddingHorizontal: 26,
-    borderRadius: radii.button,
-  },
-  permissionButtonText: {
-    fontFamily: FONT.utilityStrong,
-    color: colors.white,
-    fontSize: 12,
   },
   header: {
     position: "absolute",
@@ -513,22 +479,19 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 20,
-    paddingHorizontal: 24,
-    paddingBottom: 16,
+    paddingHorizontal: 22,
+    gap: 8,
   },
-  probe: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    zIndex: 20,
+  headerRow: {
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
   },
   probeText: {
-    fontFamily: FONT.utility,
-    fontSize: 10,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    color: TAP_LABEL,
+    ...TYPE.micro,
+    color: scanSurface.text2,
+    textAlign: "right",
   },
   frameWrap: {
     position: "absolute",
@@ -542,94 +505,39 @@ const styles = StyleSheet.create({
   frame: {
     width: 240,
     height: 240,
+    // Sits a little above centre so the bottom cluster doesn't crowd it.
+    marginBottom: 80,
   },
   corner: {
     position: "absolute",
-    width: 32,
-    height: 32,
+    width: 34,
+    height: 34,
+    borderColor: scanSurface.reticle,
   },
-  cornerTL: {
-    top: 0,
-    left: 0,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderTopLeftRadius: 8,
-  },
-  cornerTR: {
-    top: 0,
-    right: 0,
-    borderTopWidth: 2,
-    borderRightWidth: 2,
-    borderTopRightRadius: 8,
-  },
-  cornerBL: {
-    bottom: 0,
-    left: 0,
-    borderBottomWidth: 2,
-    borderLeftWidth: 2,
-    borderBottomLeftRadius: 8,
-  },
-  cornerBR: {
-    bottom: 0,
-    right: 0,
-    borderBottomWidth: 2,
-    borderRightWidth: 2,
-    borderBottomRightRadius: 8,
-  },
-  affordanceWrap: {
+  cornerTL: { top: 0, left: 0, borderTopWidth: RETICLE, borderLeftWidth: RETICLE, borderTopLeftRadius: 12 },
+  cornerTR: { top: 0, right: 0, borderTopWidth: RETICLE, borderRightWidth: RETICLE, borderTopRightRadius: 12 },
+  cornerBL: { bottom: 0, left: 0, borderBottomWidth: RETICLE, borderLeftWidth: RETICLE, borderBottomLeftRadius: 12 },
+  cornerBR: { bottom: 0, right: 0, borderBottomWidth: RETICLE, borderRightWidth: RETICLE, borderBottomRightRadius: 12 },
+  bottom: {
     position: "absolute",
     left: 0,
     right: 0,
-    alignItems: "center",
+    bottom: 0,
+    paddingHorizontal: 22,
+    gap: 18,
   },
-  tapTarget: {
-    alignItems: "center",
-    gap: 12,
+  status: {
+    ...TYPE.small,
+    color: scanSurface.text2,
+    textAlign: "center",
   },
-  tapTargetWaiting: { opacity: 0.45 },
-  // Auto mode has no tap target — just a centered live status readout in its place.
-  autoStatus: {
-    alignItems: "center",
-    gap: 8,
-    minHeight: 64,
-    justifyContent: "center",
+  shutter: {
+    alignSelf: "center",
+    width: 72,
+    height: 72,
+    borderRadius: radii.chip,
+    borderWidth: 4,
+    borderColor: scanSurface.shutterRing,
   },
-  outerRing: {
-    width: 64,
-    height: 64,
-    borderRadius: radii.button,
-    borderWidth: 2,
-    borderColor: RING_BORDER,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  innerCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.button,
-    backgroundColor: RING_FILL,
-    borderWidth: 1.5,
-    borderColor: colors.sprout,
-  },
-  tapLabel: {
-    fontFamily: FONT.utility,
-    fontSize: 10,
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-    color: TAP_LABEL,
-  },
-  detectionSub: {
-    fontFamily: FONT.utility,
-    fontSize: 9,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    color: colors.sprout,
-  },
-  scanningLabel: {
-    fontFamily: FONT.utilityStrong,
-    fontSize: 10,
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-    color: colors.sprout,
-  },
+  shutterDisabled: { opacity: 0.45 },
 });

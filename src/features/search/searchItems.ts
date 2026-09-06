@@ -20,15 +20,17 @@ function normalize(value: string): string {
   return value.toLowerCase().replace(/[-_()]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
-// Ranking tiers, lower sorts first. A match on the display name outranks one that only hit
-// the description, and a name the query is a prefix of outranks a mid-word hit — so "bat"
-// surfaces "Batteries" above an item that merely mentions batteries in its notes.
-const RANK = { namePrefix: 0, nameSubstring: 1, descriptionOnly: 2 } as const;
+// Ranking tiers, lower sorts first. A match on the display name outranks one on a registry
+// keyword ("pop" → Aluminum Beverage Can), which outranks one that only hit the description,
+// and a name the query is a prefix of outranks a mid-word hit — so "bat" surfaces
+// "Batteries" above an item that merely mentions batteries in its notes.
+const RANK = { namePrefix: 0, nameSubstring: 1, keyword: 2, descriptionOnly: 3 } as const;
 
 function rankOf(needle: string, item: RegionItem): number | null {
   const name = normalize(item.display_name);
   if (name.startsWith(needle)) return RANK.namePrefix;
   if (name.includes(needle)) return RANK.nameSubstring;
+  if (item.keywords?.some((keyword) => normalize(keyword).includes(needle))) return RANK.keyword;
   if (normalize(item.description).includes(needle)) return RANK.descriptionOnly;
   return null;
 }

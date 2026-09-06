@@ -1,16 +1,19 @@
 /**
- * The three-tab shell: History, Scan, Settings.
+ * The five-tab shell: Location, History, Scan, Search, Settings.
  *
  * The tab bar is hand-rendered rather than configured, because the spec's center Scan tab
  * (larger icon, center position) isn't something the default bar expresses. `TAB_ORDER`
  * below is the single place the order, labels and icons are declared.
+ *
+ * Styling follows the sheet: the bar is the page ground separated by a 1px `line`, the
+ * active tab reads in accent green, labels are mono micro eyebrows.
  */
 import { Tabs, type BottomTabBarProps } from "expo-router/js-tabs";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { HistoryIcon, ScanIcon, SearchIcon, SettingsIcon } from "@/ui/TabIcons";
-import { accent, FONT, useTheme } from "@/ui/theme";
+import { HistoryIcon, LocationIcon, ScanIcon, SearchIcon, SettingsIcon } from "@/ui/TabIcons";
+import { TYPE, useTheme } from "@/ui/theme";
 
 type TabDef = {
   name: string;
@@ -19,16 +22,18 @@ type TabDef = {
   size: number;
 };
 
-// Order: History (left), Scan and Search (the two large center tabs), Settings (right).
+// Order: Location and History (left), Scan and Search (the two large center tabs),
+// Settings (right).
 const TAB_ORDER: TabDef[] = [
+  { name: "region", label: "Location", Icon: LocationIcon, size: 22 },
   { name: "history", label: "History", Icon: HistoryIcon, size: 22 },
-  { name: "index", label: "Scan", Icon: ScanIcon, size: 30 },
-  { name: "search", label: "Search", Icon: SearchIcon, size: 30 },
+  { name: "index", label: "Scan", Icon: ScanIcon, size: 28 },
+  { name: "search", label: "Search", Icon: SearchIcon, size: 28 },
   { name: "settings", label: "Settings", Icon: SettingsIcon, size: 22 },
 ];
 
 function CustomTabBar({ state, navigation }: BottomTabBarProps) {
-  const { theme, name: themeName } = useTheme();
+  const { theme } = useTheme();
   const insets = useSafeAreaInsets();
 
   return (
@@ -36,8 +41,8 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
       style={[
         styles.bar,
         {
-          backgroundColor: theme.navBg,
-          borderTopColor: theme.navBorder,
+          backgroundColor: theme.bg,
+          borderTopColor: theme.line,
           paddingBottom: insets.bottom,
         },
       ]}
@@ -47,7 +52,7 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         if (!route) return null;
         const routeIndex = state.routes.indexOf(route);
         const focused = state.index === routeIndex;
-        const color = focused ? accent[themeName] : theme.textMuted;
+        const color = focused ? theme.accent : theme.text2;
 
         const onPress = () => {
           const event = navigation.emit({
@@ -61,16 +66,16 @@ function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         };
 
         return (
-          <Pressable key={tab.name} style={styles.tab} onPress={onPress}>
+          <Pressable
+            key={tab.name}
+            style={styles.tab}
+            onPress={onPress}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: focused }}
+            accessibilityLabel={tab.label}
+          >
             <tab.Icon size={tab.size} color={color} />
-            <Text
-              style={[
-                styles.label,
-                { color, fontFamily: focused ? FONT.utilityStrong : FONT.utility },
-              ]}
-            >
-              {tab.label}
-            </Text>
+            <Text style={[TYPE.micro, { color }]}>{tab.label}</Text>
           </Pressable>
         );
       })}
@@ -85,6 +90,7 @@ export default function TabsLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
     >
       <Tabs.Screen name="index" />
+      <Tabs.Screen name="region" />
       <Tabs.Screen name="history" />
       <Tabs.Screen name="search" />
       <Tabs.Screen name="settings" />
@@ -102,12 +108,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingTop: 12,
-    paddingBottom: 12,
-    gap: 4,
-  },
-  label: {
-    fontSize: 9,
-    textTransform: "uppercase",
-    letterSpacing: 1.4,
+    paddingBottom: 10,
+    gap: 5,
   },
 });

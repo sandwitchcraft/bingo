@@ -22,13 +22,16 @@ export const StorageKeys = {
   /** Which provider category the picker's segment last showed, so it reopens where it was. */
   regionPickerCategory: "bingo.region.pickerCategory",
   /**
-   * Region ids the user has hearted, as a JSON array. Purely an ordering preference for the
-   * picker — a favourite is independent of whether the region is downloaded or selected, and
-   * an id that has since left the catalog is kept rather than pruned (an offline launch shows
-   * the short bundled catalog, and pruning against it would silently drop real favourites).
+   * The user's saved places ("Home", "Work", "Cottage"), as a JSON array of
+   * `{ id, label, regionId }`. A place is a label pinned to exactly one region; the region's
+   * rules are downloaded when the place is saved and removed when its last place is deleted.
    */
-  favouriteRegionIds: "bingo.region.favourites",
+  places: "bingo.places",
+  /** The id of the place currently in use. Its region is `selectedRegionId`. */
+  activePlaceId: "bingo.places.activeId",
   regionIndex: "bingo.region.index",
+  /** The global item registry (bingoDB's items.json): names, keywords and materials by key. */
+  itemRegistry: "bingo.items.registry",
   /**
    * The prefix and the key builder are defined together because the set of downloaded
    * regions is derived by scanning for this prefix (`listDownloadedRegionIds`) — if the two

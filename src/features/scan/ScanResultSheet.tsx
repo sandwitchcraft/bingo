@@ -23,11 +23,12 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { LocationChip } from "@/features/region/LocationChip";
 import { ResultView } from "@/features/scan/ResultView";
 import { useScanResult } from "@/features/scan/scanResult";
-import { useTheme } from "@/ui/theme";
+import { radii, useTheme } from "@/ui/theme";
 
-const COLLAPSED_HEIGHT = 320; // visible content height when collapsed
+const COLLAPSED_HEIGHT = 380; // visible content height when collapsed — the item line + the answer card
 const SNAP_THRESHOLD = 60; // drag travel to switch snap state
 const SHEET_EASING = Easing.bezier(0.32, 0.72, 0, 1);
 
@@ -136,13 +137,13 @@ export function ScanResultSheet() {
       <Animated.View
         style={[
           styles.sheet,
-          { height: sheetHeight, backgroundColor: theme.bgAlt, borderColor: theme.cardBorder },
+          { height: sheetHeight, backgroundColor: theme.card, borderColor: theme.line, shadowColor: theme.shadow },
           sheetStyle,
         ]}
       >
         <GestureDetector gesture={pan}>
           <View style={styles.handleZone}>
-            <View style={[styles.handleBar, { backgroundColor: theme.handleBar }]} />
+            <View style={[styles.handleBar, { backgroundColor: theme.lineStrong }]} />
           </View>
         </GestureDetector>
 
@@ -162,6 +163,10 @@ export function ScanResultSheet() {
               router.push("/history");
             }}
             context="scan"
+            // The place chip lives inside the sheet (not only on the Scan screen behind it), so
+            // it stays reachable once the sheet is expanded and covers the header. On the
+            // "Sorted item" line, so it doesn't push the answer down.
+            headerRight={<LocationChip itemKey={activeItemKey} />}
           />
         </ScrollView>
       </Animated.View>
@@ -170,19 +175,25 @@ export function ScanResultSheet() {
 }
 
 const styles = StyleSheet.create({
+  // A device-screen radius (34) and the one soft shadow the sheet reserves for things that
+  // represent a screen or a modal.
   sheet: {
     position: "absolute",
     left: 0,
     right: 0,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: radii.screen,
+    borderTopRightRadius: radii.screen,
     borderLeftWidth: 1,
     borderRightWidth: 1,
     borderTopWidth: 1,
+    shadowOpacity: 1,
+    shadowRadius: 34,
+    shadowOffset: { width: 0, height: -14 },
+    elevation: 12,
   },
   handleZone: {
     paddingTop: 12,
-    paddingBottom: 4,
+    paddingBottom: 6,
     alignItems: "center",
   },
   handleBar: {
@@ -191,7 +202,8 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   content: {
-    paddingHorizontal: 24,
-    gap: 16,
+    paddingHorizontal: 22,
+    paddingTop: 6,
+    gap: 18,
   },
 });

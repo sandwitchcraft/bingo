@@ -1,15 +1,34 @@
 /**
- * The bottom-nav glyphs — `ScanIcon`, `HistoryIcon`, `SearchIcon`, `SettingsIcon` — used only
- * by `src/app/(tabs)/_layout.tsx`. Same pictogram spec as `ItemIcons.tsx` and `RegionIcons.tsx`:
+ * The bottom-nav glyphs — `LocationIcon`, `HistoryIcon`, `ScanIcon`, `SearchIcon`,
+ * `SettingsIcon` — used only
+ * by `src/app/(tabs)/_layout.tsx`. Same pictogram spec as `ItemIcons.tsx` and `ui/Icons.tsx`:
  * 24px grid, single-weight stroke, round caps, no fill.
  */
 import Svg, { Circle, Line, Path, Polyline } from "react-native-svg";
 
+import { iconStroke } from "@/ui/theme";
+
 type IconProps = { size: number; color: string };
 
-// Stroke-only icons at the brand pictogram weight: single-weight ~1.8px line, round
+// Stroke-only icons at the brand pictogram weight: 2.4 stroke line, round
 // caps, no fill.
-const STROKE = 1.8;
+const STROKE = iconStroke;
+
+/** Map pin: the Location tab (region picker). */
+export function LocationIcon({ size, color }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"
+        stroke={color}
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Circle cx={12} cy={10} r={3} stroke={color} strokeWidth={STROKE} />
+    </Svg>
+  );
+}
 
 export function ScanIcon({ size, color }: IconProps) {
   return (

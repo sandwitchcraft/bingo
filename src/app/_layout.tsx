@@ -3,7 +3,8 @@
  *
  * Its whole job is composition: load the brand fonts, hold the theme preference, mount the
  * provider stack (SQLite → scan settings → toast → region → scan result), and declare the
- * two top-level routes — the `(tabs)` group and the pushed `region` picker. The two pieces
+ * top-level routes — the `(tabs)` group and the pushed `add-place` and `item` screens.
+ * The two pieces
  * of always-on UI that must float above every screen, `ScanResultSheet` and `ErrorToast`,
  * are mounted here rather than per-screen.
  *
@@ -11,11 +12,15 @@
  * SQLiteProvider memo note in particular is the reason theme state lives above it.
  */
 import {
-  IBMPlexMono_500Medium,
-  IBMPlexMono_600SemiBold,
-} from "@expo-google-fonts/ibm-plex-mono";
-import { Inter_400Regular, Inter_600SemiBold } from "@expo-google-fonts/inter";
-import { Manrope_700Bold, Manrope_800ExtraBold } from "@expo-google-fonts/manrope";
+  BricolageGrotesque_600SemiBold,
+  BricolageGrotesque_700Bold,
+} from "@expo-google-fonts/bricolage-grotesque";
+import {
+  HankenGrotesk_400Regular,
+  HankenGrotesk_500Medium,
+  HankenGrotesk_600SemiBold,
+} from "@expo-google-fonts/hanken-grotesk";
+import { IBMPlexMono_400Regular } from "@expo-google-fonts/ibm-plex-mono";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { SQLiteProvider } from "expo-sqlite";
@@ -25,6 +30,8 @@ import { useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { DATABASE_NAME, DATABASE_OPTIONS, migrateDbAsync } from "@/features/history/db";
+import { PlacesSheet } from "@/features/region/PlacesSheet";
+import { PlacesProvider } from "@/features/region/placesStore";
 import { RegionProvider } from "@/features/region/regionStore";
 import { ReportProvider } from "@/features/reports/reportStore";
 import { ReportSheet } from "@/features/reports/ReportSheet";
@@ -36,13 +43,14 @@ import { resolveTheme, THEMES, ThemeContext, type ThemePreference } from "@/ui/t
 import { ToastProvider } from "@/ui/toast";
 
 export default function RootLayout() {
+  // The three faces the design system allows, at the weights it uses — see brand.ts.
   const [fontsLoaded] = useFonts({
-    Manrope_700Bold,
-    Manrope_800ExtraBold,
-    Inter_400Regular,
-    Inter_600SemiBold,
-    IBMPlexMono_500Medium,
-    IBMPlexMono_600SemiBold,
+    BricolageGrotesque_600SemiBold,
+    BricolageGrotesque_700Bold,
+    HankenGrotesk_400Regular,
+    HankenGrotesk_500Medium,
+    HankenGrotesk_600SemiBold,
+    IBMPlexMono_400Regular,
   });
 
   // Re-renders when the OS scheme changes, so "system" tracks it live rather than
@@ -92,27 +100,33 @@ export default function RootLayout() {
               {/* Above ScanResultProvider: recording a scan reads the active region's rules
                   for the bin outcome and the region name it stores. */}
               <RegionProvider>
-                <ScanResultProvider>
-                  {/* Holds the report sheet's open/close state; the sheet is rendered below,
-                      above the result sheet but under the toast. */}
-                  <ReportProvider>
-                    <Stack screenOptions={{ headerShown: false }}>
-                      <Stack.Screen name="(tabs)" />
-                      {/* Not a tab — pushed from Settings, and the native stack's
-                          slide-from-right is what gives it its reveal (and back-swipe). */}
-                      <Stack.Screen name="region" options={{ animation: "slide_from_right" }} />
-                      {/* The full-screen item result, pushed from the Search tab. Same
-                          native slide (and back-swipe) as the region picker. */}
-                      <Stack.Screen name="item" options={{ animation: "slide_from_right" }} />
-                    </Stack>
-                    <ScanResultSheet />
-                    {/* Above the result sheet and tabs; still under the toast below. */}
-                    <ReportSheet />
-                    {/* Last, so the banner floats above the report and result sheets as well
-                        as the tabs. */}
-                    <ErrorToast />
-                  </ReportProvider>
-                </ScanResultProvider>
+                {/* Saved places sit on top of the region store: they drive selectRegion /
+                    downloads on the user's behalf, so they need it above them. */}
+                <PlacesProvider>
+                  <ScanResultProvider>
+                    {/* Holds the report sheet's open/close state; the sheet is rendered below,
+                        above the result sheet but under the toast. */}
+                    <ReportProvider>
+                      <Stack screenOptions={{ headerShown: false }}>
+                        <Stack.Screen name="(tabs)" />
+                        {/* Not a tab — pushed from the Location tab, and the native stack's
+                            slide-from-right is what gives it its reveal (and back-swipe). */}
+                        <Stack.Screen name="add-place" options={{ animation: "slide_from_right" }} />
+                        {/* The full-screen item result, pushed from the Search tab. Same
+                            native slide (and back-swipe) as add-place. */}
+                        <Stack.Screen name="item" options={{ animation: "slide_from_right" }} />
+                      </Stack>
+                      <ScanResultSheet />
+                      {/* The places dropdown, raised from any screen's location chip. */}
+                      <PlacesSheet />
+                      {/* Above the result sheet and tabs; still under the toast below. */}
+                      <ReportSheet />
+                      {/* Last, so the banner floats above the report and result sheets as well
+                          as the tabs. */}
+                      <ErrorToast />
+                    </ReportProvider>
+                  </ScanResultProvider>
+                </PlacesProvider>
               </RegionProvider>
             </ToastProvider>
           </ScanSettingsProvider>

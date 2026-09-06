@@ -1,8 +1,14 @@
 /**
- * The shared result body — item name, bin outcome, the "why" note, the local-guide link,
+ * The shared answer body — "Sorted item", the bin card, the reason, the local-guide row
  * and the action set. Rendered identically by the scan result sheet (`ScanResultSheet`) and
  * the full-screen search result (`app/item.tsx`) so the two can never drift; each host
  * supplies its own scroll container and the one context-specific action.
+ *
+ * Order is the voice rule: bin, then reason, then where to check. The bin card is the only
+ * block of colour on the screen — it takes the bin's full fill with the ink that sits on it,
+ * so the colour IS the answer — no provider name on it, the place chip in the host's header
+ * already says where you are. The reason is an accent-tint note; the guide row is a plain
+ * hairline row with its text in the link green.
  *
  * The local-guide link is featured for EVERY item: `result.link` is only populated for the
  * consult-guide fallback, so it falls back to the region's own `site_url` — always the best
@@ -13,14 +19,16 @@
  * full screen.
  */
 import * as WebBrowser from "expo-web-browser";
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { BIN_LABEL, binColor, binSurface } from "@/core/bins";
-import { resolveScanResult } from "@/features/region/regionData";
+import { BIN_LABEL } from "@/core/bins";
+import { getRegionName, resolveScanResult } from "@/features/region/regionData";
 import { useRegionRules } from "@/features/region/regionStore";
 import { useReport, type ReportContext } from "@/features/reports/reportStore";
-import { FONT, radii, useTheme } from "@/ui/theme";
+import { Button } from "@/ui/Button";
+import { ExternalGlyph, InfoGlyph } from "@/ui/Icons";
+import { radii, TYPE, useTheme } from "@/ui/theme";
 
 type ResultViewProps = {
   itemKey: string;
@@ -33,6 +41,12 @@ type ResultViewProps = {
    * misidentification (search picks the item by name), so `search` skips that choice.
    */
   context: ReportContext;
+  /**
+   * Sits on the "Sorted item" line, right-aligned — the result sheet puts its place chip here
+   * so it shares the header row instead of pushing the answer down. The full-screen host has
+   * its own header and passes nothing.
+   */
+  headerRight?: ReactNode;
 };
 
 export function ResultView({
@@ -41,6 +55,7 @@ export function ResultView({
   onPrimaryAction,
   onViewHistory,
   context,
+  headerRight,
 }: ResultViewProps) {
   const { theme } = useTheme();
   const rules = useRegionRules();
@@ -49,110 +64,114 @@ export function ResultView({
   // resolveScanResult always returns a result — a real rule, or the consult-guide fallback
   // for a key this region doesn't list — so there's no not-found state to handle.
   const result = resolveScanResult(rules, itemKey);
-  const surface = binSurface(result.bin);
-  const accent = binColor(result.bin);
+  const swatch = theme.bins[result.bin];
   const guideUrl = result.link ?? rules.site_url;
+  const regionName = getRegionName(rules);
 
   return (
     <Fragment>
-      {/* Item header — the name itself carries the bin's outcome color. */}
+      {/* What was asked. Plain ink — the card below carries the colour. */}
       <View style={styles.itemHeader}>
-        <Text style={[styles.eyebrow, { color: theme.textMuted }]}>Item</Text>
-        <Text style={[styles.itemName, { color: accent }]}>{result.display_name}</Text>
+        <View style={styles.itemText}>
+          <Text style={[TYPE.micro, { color: theme.text2 }]}>Sorted item</Text>
+          <Text style={[TYPE.h3, styles.itemName, { color: theme.text }]}>{result.display_name}</Text>
+        </View>
+        {headerRight}
       </View>
 
-      {/* Bin outcome */}
-      <View style={[styles.binCard, { backgroundColor: surface.bg, borderColor: surface.border }]}>
-        <Text style={[styles.eyebrow, { color: theme.textMuted }]}>Sort into</Text>
-        <Text style={[styles.binLabel, { color: accent }]}>{BIN_LABEL[result.bin]}</Text>
-      </View>
-
-      {/* Handling detail */}
-      <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-        <Text style={[styles.eyebrow, { color: theme.textMuted }]}>Why</Text>
-        <Text style={[styles.body, { color: theme.textBody }]}>{result.description}</Text>
-      </View>
-
-      {/* Local guide — featured for every item, not only consult-guide results. */}
-      {guideUrl ? (
-        <Pressable
-          style={[styles.linkRow, { borderColor: surface.border, backgroundColor: surface.bg }]}
-          onPress={() => WebBrowser.openBrowserAsync(guideUrl)}
+      {/* The answer: the bin's full fill, its ink on top. */}
+      <View style={[styles.binCard, { backgroundColor: swatch.fill }]}>
+        <Text style={[TYPE.micro, styles.goesIn, { color: swatch.ink }]}>Goes in</Text>
+        <Text
+          style={[TYPE.answer, { color: swatch.ink }]}
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.6}
         >
-          <Text style={[styles.linkText, { color: accent }]}>View local disposal guide ↗</Text>
-        </Pressable>
+          {BIN_LABEL[result.bin]}
+        </Text>
+      </View>
+
+      {/* The reason. */}
+      {result.description ? (
+        <View style={[styles.note, { backgroundColor: theme.accentTint }]}>
+          <InfoGlyph size={19} color={theme.accentInk} />
+          <Text style={[TYPE.note, styles.noteText, { color: theme.accentInk }]}>
+            {result.description}
+          </Text>
+        </View>
       ) : null}
 
-      {/* Actions */}
-      <View style={styles.actions}>
-        <Pressable
-          style={[styles.btn, { backgroundColor: theme.secondaryBg }]}
-          onPress={onPrimaryAction}
-        >
-          <Text style={[styles.btnText, { color: theme.secondaryText }]}>{primaryActionLabel}</Text>
-        </Pressable>
-        <Pressable style={[styles.btn, { backgroundColor: theme.primary }]} onPress={onViewHistory}>
-          <Text style={[styles.btnText, { color: theme.primaryText }]}>View history</Text>
-        </Pressable>
-      </View>
+      {/* Where to check — featured for every item, not only consult-guide results. */}
+      {guideUrl ? (
+        <View style={styles.section}>
+          <Text style={[TYPE.micro, { color: theme.text2 }]}>If you're not sure</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.guideRow,
+              { borderColor: theme.line, backgroundColor: pressed ? theme.surface : "transparent" },
+            ]}
+            onPress={() => WebBrowser.openBrowserAsync(guideUrl)}
+            accessibilityRole="link"
+            accessibilityLabel={`Open the ${regionName} waste guide`}
+          >
+            <Text style={[TYPE.note, styles.guideText, { color: theme.accentStrong }]}>
+              Check out your region's sorting guide
+            </Text>
+            <ExternalGlyph size={18} color={theme.accentStrong} />
+          </Pressable>
+        </View>
+      ) : null}
 
-      {/* Report incorrect sort — opens the root-mounted report sheet for this item. */}
-      <Pressable style={styles.reportRow} onPress={() => openReport(itemKey, context)}>
-        <Text style={[styles.reportText, { color: theme.textMuted }]}>Report incorrect sort</Text>
-      </Pressable>
+      {/* Actions: two solid pills sharing the row — the context action in beige, history in
+          green — with the report flow as green text underneath. */}
+      <View style={styles.actions}>
+        <Button label={primaryActionLabel} variant="tonal" style={styles.actionMain} onPress={onPrimaryAction} />
+        <Button label="View history" variant="primary" style={styles.actionMain} onPress={onViewHistory} />
+      </View>
+      <Button
+        label="Report a problem"
+        variant="ghost"
+        size="sm"
+        onPress={() => openReport(itemKey, context)}
+        style={styles.reportBtn}
+      />
     </Fragment>
   );
 }
 
 const styles = StyleSheet.create({
-  itemHeader: { paddingTop: 4 },
-  eyebrow: {
-    fontFamily: FONT.utility,
-    fontSize: 10,
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-  },
-  itemName: {
-    fontFamily: FONT.display,
-    fontSize: 26,
-    letterSpacing: -0.4,
-    marginTop: 3,
-  },
+  itemHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  itemText: { flex: 1 },
+  itemName: { marginTop: 4 },
   binCard: {
-    borderRadius: radii.card,
-    borderWidth: 1,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+    borderRadius: radii.xl,
+    paddingHorizontal: 24,
+    paddingVertical: 26,
+    gap: 16,
   },
-  binLabel: {
-    fontFamily: FONT.heading,
-    fontSize: 20,
-    letterSpacing: -0.2,
-    marginTop: 3,
+  goesIn: { opacity: 0.8, letterSpacing: 1.2 },
+  note: {
+    flexDirection: "row",
+    gap: 11,
+    paddingHorizontal: 17,
+    paddingVertical: 15,
+    borderRadius: radii.md,
+    alignItems: "flex-start",
   },
-  card: {
-    borderRadius: radii.card,
-    borderWidth: 1,
-    padding: 18,
-    gap: 8,
-  },
-  body: { fontFamily: FONT.body, fontSize: 14, lineHeight: 21 },
-  linkRow: {
-    borderRadius: radii.card,
-    borderWidth: 1,
+  noteText: { flex: 1 },
+  section: { gap: 9 },
+  guideRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    alignItems: "center",
+    borderRadius: radii.md,
+    borderWidth: 1,
   },
-  linkText: { fontFamily: FONT.utilityStrong, fontSize: 12 },
-  actions: { flexDirection: "row", gap: 12 },
-  btn: {
-    flex: 1,
-    borderRadius: radii.button,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  btnText: { fontFamily: FONT.utilityStrong, fontSize: 12 },
-  reportRow: { alignItems: "center", paddingVertical: 4 },
-  reportText: { fontFamily: FONT.utility, fontSize: 11, letterSpacing: 0.2 },
+  guideText: { flex: 1 },
+  actions: { flexDirection: "row", gap: 10, alignItems: "center", marginTop: 4 },
+  actionMain: { flex: 1 },
+  reportBtn: { alignSelf: "center" },
 });

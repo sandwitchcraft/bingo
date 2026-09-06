@@ -4,19 +4,19 @@
  *
  * Icons are looked up by item key with a generic fallback, so an item the region rules name
  * but this file has no drawing for still renders. Same pictogram spec as `TabIcons.tsx` and
- * `RegionIcons.tsx` — 24px grid, single-weight stroke, round caps, no fill.
+ * `ui/Icons.tsx` — 24px grid, single-weight stroke, round caps, no fill.
  */
 import { View } from "react-native";
 import Svg, { Path, Rect } from "react-native-svg";
 
-import { binColor, binTint, type BinType } from "@/core/bins";
-import { radii } from "@/ui/theme";
+import type { BinType } from "@/core/bins";
+import { iconStroke, radii, useTheme } from "@/ui/theme";
 
 type IconProps = { size: number; color: string };
 
-// Brand pictogram style: single-weight line, ~1.8px stroke on a 24px grid, round
+// Brand pictogram style: single-weight line, 2.4 stroke on a 24px grid, round
 // caps/joins, no fill. Shared here so every item icon stays on the same weight.
-const STROKE = 1.8;
+const STROKE = iconStroke;
 
 function Glyph({ size, color, children }: IconProps & { children: React.ReactNode }) {
   return (
@@ -179,9 +179,10 @@ export function getItemIcon(itemKey: string) {
 }
 
 /**
- * An item pictogram on its circular badge. The badge tint and the icon stroke both
- * come from the item's bin OUTCOME — not from the item's material — so the badge
- * teaches the sort result at a glance.
+ * An item pictogram on its circular badge. The badge takes the bin's tint and the icon its
+ * tint-ink — the OUTCOME's colours, not the item's material — so the badge teaches the sort
+ * result at a glance. (Not currently rendered anywhere: the sheet's lid bar carries the
+ * outcome in rows and cards. Kept for the result view's future item art.)
  */
 export function ItemBadge({
   itemKey,
@@ -193,6 +194,8 @@ export function ItemBadge({
   size?: number;
 }) {
   const Icon = getItemIcon(itemKey);
+  const { theme } = useTheme();
+  const swatch = theme.bins[bin];
 
   return (
     <View
@@ -200,19 +203,20 @@ export function ItemBadge({
         width: size,
         height: size,
         borderRadius: radii.iconBadge,
-        backgroundColor: binTint(bin, "badge"),
+        backgroundColor: swatch.tint,
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <Icon size={size * 0.55} color={binColor(bin)} />
+      <Icon size={size * 0.55} color={swatch.tintInk} />
     </View>
   );
 }
 
 /** Bin-outcome pictograms, used where the bin itself is the subject. */
 export function BinGlyph({ bin, size = 24 }: { bin: BinType; size?: number }) {
-  const color = binColor(bin);
+  const { theme } = useTheme();
+  const color = theme.bins[bin].fill;
 
   if (bin === "recycling") {
     // Mobius arrows from Lucide (`recycle`), ISC licensed:
